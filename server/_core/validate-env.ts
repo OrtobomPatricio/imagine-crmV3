@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { logger, safeError } from "./logger";
 
 export function validateProductionSecrets() {
     const isProduction = process.env.NODE_ENV === "production";
