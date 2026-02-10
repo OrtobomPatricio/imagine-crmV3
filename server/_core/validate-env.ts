@@ -25,12 +25,17 @@ export function validateProductionSecrets() {
         );
     }
 
-    // Check OWNER_OPEN_ID
-    if (INSECURE_DEFAULTS.includes(ENV.ownerOpenId)) {
-        throw new Error(
-            "🔴 PRODUCTION SECURITY ERROR: OWNER_OPEN_ID must be set to a real value. Cannot use 'dev-owner'"
-        );
+    // Check for OWNER_OPEN_ID or OWNER_EMAIL
+    if (!process.env.OWNER_OPEN_ID && !process.env.OWNER_EMAIL) {
+        const error = new Error("🔴 PRODUCTION SECURITY ERROR: Either OWNER_OPEN_ID or OWNER_EMAIL must be set. Cannot use 'dev-owner'");
+        logger.fatal({ err: safeError(error) }, "startup failed");
+        throw error;
     }
 
+    if (process.env.OWNER_OPEN_ID === "dev-owner" && !process.env.OWNER_EMAIL) {
+        const error = new Error("🔴 PRODUCTION SECURITY ERROR: OWNER_OPEN_ID cannot be 'dev-owner' in production unless OWNER_EMAIL is set");
+        logger.fatal({ err: safeError(error) }, "startup failed");
+        throw error;
+    }
     console.log("✅ Production environment variables validated successfully");
 }
