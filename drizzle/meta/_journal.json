@@ -1,0 +1,118 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1768866058173,
+      "tag": "0000_stiff_roulette",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1768866173991,
+      "tag": "0001_previous_stellaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1768869330965,
+      "tag": "0002_lonely_devos",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1768869350172,
+      "tag": "0003_keen_luke_cage",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1768870397937,
+      "tag": "0004_zippy_dreaming_celestial",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1768935378061,
+      "tag": "0005_complete_professional_upgrade",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1768957849794,
+      "tag": "0006_fast_lake",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1769049726822,
+      "tag": "0007_thick_iron_lad",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1769166057194,
+      "tag": "0008_pro_upgrade_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1769533760106,
+      "tag": "0009_quick_corsair",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1769536344748,
+      "tag": "0010_illegal_lucky_pierre",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1769639515902,
+      "tag": "0011_tough_liz_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1769692133592,
+      "tag": "0012_cultured_martin_li",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1770336369961,
+      "tag": "0013_sharp_hydra",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1770384672257,
+      "tag": "0032_helpdesk_support",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1770386164261,
+      "tag": "0033_whatsapp_channel_separation",
+      "breakpoints": true
+    }
+  ]
+}

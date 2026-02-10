@@ -1,0 +1,30 @@
+.git
+node_modules
+**/node_modules
+dist
+**/dist
+.pnpm-store
+**/.pnpm-store
+.manus-logs
+**/.manus-logs
+.vscode
+.idea
+.DS_Store
+.env
+*.log
+
+# Tests & Coverage
+coverage
+playwright-report
+test-results
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+vitest.config.ts
+
+# Documentation & Misc
+README.md
+docs
+deployment_guide.md
+START_LOCAL.md
+todo.md
