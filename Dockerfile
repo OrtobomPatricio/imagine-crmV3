@@ -34,10 +34,12 @@ ENV VITE_OAUTH_PORTAL_URL=$VITE_OAUTH_PORTAL_URL \
     NODE_ENV=production
 
 # Build Client & Server
-RUN pnpm exec vite build --logLevel error
-RUN pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js
-RUN pnpm exec esbuild server/scripts/migrate.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/migrate.js
-RUN pnpm exec esbuild server/scripts/bootstrap-admin.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/bootstrap-admin.js
+# Explicitly set shell to avoid "no such file or directory" errors
+SHELL ["/bin/bash", "-c"]
+RUN pnpm exec vite build --logLevel error && \
+    pnpm exec esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.js && \
+    pnpm exec esbuild server/scripts/migrate.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/migrate.js && \
+    pnpm exec esbuild server/scripts/bootstrap-admin.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/bootstrap-admin.js
 
 # Prune for production
 RUN pnpm prune --prod
