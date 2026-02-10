@@ -90,10 +90,28 @@ services:
       retries: 3
       start_period: 30s
 
+  caddy:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - app_network
+
 volumes:
   mysql_data:
   redis_data:
   uploads_data:
+  caddy_data:
+  caddy_config:
 
 
 networks:
