@@ -110,12 +110,17 @@ export function registerNativeOAuth(app: Express) {
                     }
 
                     // Upsert user in database
+                    // Check if this user should be owner based on email
+                    const ownerEmail = process.env.OWNER_EMAIL;
+                    const isOwner = ownerEmail && user.email && user.email.toLowerCase() === ownerEmail.toLowerCase();
+
                     await db.upsertUser({
                         openId: user.openId,
                         name: user.name || null,
                         email: user.email || null,
                         loginMethod: 'google',
                         lastSignedIn: new Date(),
+                        role: isOwner ? 'owner' : undefined,
                     });
 
                     // Create session token
@@ -203,12 +208,16 @@ export function registerNativeOAuth(app: Express) {
                     }
 
                     // Upsert user in database
+                    const ownerEmail = process.env.OWNER_EMAIL;
+                    const isOwner = ownerEmail && user.email && user.email.toLowerCase() === ownerEmail.toLowerCase();
+
                     await db.upsertUser({
                         openId: user.openId,
                         name: user.name || null,
                         email: user.email || null,
                         loginMethod: 'microsoft',
                         lastSignedIn: new Date(),
+                        role: isOwner ? 'owner' : undefined,
                     });
 
                     // Create session token

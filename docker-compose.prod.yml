@@ -56,6 +56,8 @@ services:
       - "${PORT:-3000}:3000"
     networks:
       - app_network
+    env_file:
+      - ./deploy/production.env
     environment:
       NODE_ENV: production
       PORT: 3000
