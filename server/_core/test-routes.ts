@@ -8,7 +8,7 @@ import {
   conversations,
   chatMessages,
 } from "../../drizzle/schema";
-import { requireAuthMiddleware } from "./auth";
+import { requireAuthMiddleware } from "./middleware/auth";
 import { logger, safeError } from "./logger";
 import { normalizeContactPhone } from "./phone";
 import { processMetaWebhookPayload } from "../whatsapp/webhook";
