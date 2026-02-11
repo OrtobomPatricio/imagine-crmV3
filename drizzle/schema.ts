@@ -374,7 +374,9 @@ export const integrations = mysqlTable("integrations", {
   createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  idxWhatsappActive: index("idx_integrations_whatsapp_active").on(t.whatsappNumberId, t.isActive),
+}));
 
 
 
