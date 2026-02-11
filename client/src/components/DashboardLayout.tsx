@@ -73,18 +73,17 @@ type MenuItem = {
 const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/", requiredPerm: "dashboard.view" },
   { icon: Users, label: "Leads", path: "/leads", requiredPerm: "leads.view" },
-  { icon: LayoutGrid, label: "Kanban", path: "/kanban", requiredPerm: "kanban.view" },
   { icon: MessageCircle, label: "Chat", path: "/chat", requiredPerm: "chat.view" },
   { icon: Inbox, label: "Helpdesk", path: "/helpdesk", requiredPerm: "helpdesk.view" },
-  { icon: Layers, label: "Colas", path: "/helpdesk/queues", requiredPerm: "helpdesk.manage", roles: ["owner", "admin", "supervisor"] },
-  { icon: MessageSquare, label: "Respuestas", path: "/helpdesk/quick-answers", requiredPerm: "helpdesk.manage", roles: ["owner", "admin", "supervisor"] },
+  // { icon: Layers, label: "Colas", path: "/helpdesk/queues", requiredPerm: "helpdesk.manage", roles: ["owner", "admin", "supervisor"] }, // Consolidated
+  // { icon: MessageSquare, label: "Respuestas", path: "/helpdesk/quick-answers", requiredPerm: "helpdesk.manage", roles: ["owner", "admin", "supervisor"] }, // Consolidated
   { icon: Calendar, label: "Agendamiento", path: "/scheduling", requiredPerm: "scheduling.view" },
-  { icon: Send, label: "Campañas", path: "/campaigns", requiredPerm: "campaigns.view" },
-  { icon: FileText, label: "Plantillas", path: "/templates", requiredPerm: "campaigns.view" },
-  { icon: Workflow, label: "Automatización", path: "/automations", requiredPerm: "campaigns.view" },
+  { icon: Send, label: "Marketing", path: "/campaigns", requiredPerm: "campaigns.view" },
+  // { icon: FileText, label: "Plantillas", path: "/templates", requiredPerm: "campaigns.view" }, // Consolidated
+  // { icon: Workflow, label: "Automatización", path: "/automations", requiredPerm: "campaigns.view" }, // Consolidated
   { icon: Activity, label: "Monitoreo", path: "/monitoring", requiredPerm: "monitoring.view" },
   { icon: BarChart3, label: "Analytics", path: "/analytics", requiredPerm: "analytics.view" },
-  { icon: FileText, label: "Reportes", path: "/reports", requiredPerm: "reports.view" },
+  // { icon: FileText, label: "Reportes", path: "/reports", requiredPerm: "reports.view" }, // Consolidated
   { icon: Workflow, label: "Integraciones", path: "/integrations", requiredPerm: "integrations.view" },
   { icon: LayoutGrid, label: "Pipelines", path: "/settings/pipelines", requiredPerm: "kanban.manage" },
   { icon: Database, label: "Backups", path: "/backup", requiredPerm: "backups.view", roles: ["owner", "admin"] },

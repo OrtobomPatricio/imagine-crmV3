@@ -53,23 +53,23 @@ function Router() {
     <DashboardLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/leads" component={Leads} />
-        <Route path="/kanban" component={Kanban} />
+        <Route path="/leads" component={LeadsModule} />
+        {/* <Route path="/kanban" component={Kanban} /> Removed in favor of LeadsModule */}
         <Route path="/analytics" component={Analytics} />
         <Route path="/monitoring" component={Monitoring} />
-        <Route path="/campaigns" component={Campaigns} />
-        <Route path="/campaigns/new" component={CampaignBuilder} />
-        <Route path="/templates" component={Templates} />
-        <Route path="/reports" component={Reports} />
+        <Route path="/campaigns" component={MarketingModule} />
+        {/* <Route path="/campaigns/new" component={CampaignBuilder} /> Consolidated into MarketingModule */}
+        {/* <Route path="/templates" component={Templates} /> Consolidated into MarketingModule */}
+        {/* <Route path="/reports" component={Reports} /> Consolidated into Analytics */}
         <Route path="/integrations" component={Integrations} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/pipelines" component={PipelineSettings} />
-        <Route path="/automations" component={Automations} />
-        <Route path="/automations/new" component={AutomationBuilder} />
+        {/* <Route path="/automations" component={Automations} /> Consolidated into MarketingModule */}
+        {/* <Route path="/automations/new" component={AutomationBuilder} /> Consolidated into MarketingModule */}
         <Route path="/scheduling" component={Scheduling} />
         <Route path="/chat" component={Chat} />
         <Route path="/helpdesk" component={Helpdesk} />
-          <Route path="/helpdesk/queues" component={HelpdeskQueues} />
+        <Route path="/helpdesk/queues" component={HelpdeskQueues} />
         <Route path="/helpdesk/quick-answers" component={QuickAnswers} />
         <Route path="/backup" component={Backup} />
         <Route path="/404" component={NotFound} />

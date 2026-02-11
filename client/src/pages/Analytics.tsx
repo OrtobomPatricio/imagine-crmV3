@@ -17,6 +17,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useState } from "react";
+import Reports from "./Reports";
 
 export default function Analytics() {
   const { data: dashboardStats } = trpc.dashboard.getStats.useQuery();
@@ -46,6 +47,7 @@ export default function Analytics() {
           <TabsTrigger value="commissions">Comisiones</TabsTrigger>
           <TabsTrigger value="goals">Metas</TabsTrigger>
           <TabsTrigger value="achievements">Logros</TabsTrigger>
+          <TabsTrigger value="reports">Reportes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4 pt-4">
@@ -290,6 +292,9 @@ export default function Analytics() {
 
         <TabsContent value="achievements" className="pt-4">
           <AchievementsView />
+        </TabsContent>
+        <TabsContent value="reports" className="space-y-4 pt-4">
+          <Reports />
         </TabsContent>
       </Tabs>
     </div>
