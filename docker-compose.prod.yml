@@ -65,6 +65,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-default_jwt_secret_change_me_in_prod}
       OWNER_OPEN_ID: ${OWNER_OPEN_ID:-}
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
       ALLOW_DEV_LOGIN: "0"
       VITE_DEV_BYPASS_AUTH: "0"
       VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:-https://168.231.98.244.nip.io}
