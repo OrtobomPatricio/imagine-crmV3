@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, decimal, json, uniqueIndex } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, decimal, json, uniqueIndex, index } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -560,6 +560,8 @@ export const chatMessages = mysqlTable("chat_messages", {
 }, (t) => ({
   // Idempotency: prevent same WA message in same conversation
   uniqWaMessage: uniqueIndex("uniq_wa_message").on(t.whatsappMessageId, t.conversationId),
+  // Performance index for conversation history (also backs FK)
+  idxConversationCreated: index("idx_chat_messages_conversation_created").on(t.conversationId, t.createdAt),
 }));
 
 export type ChatMessage = typeof chatMessages.$inferSelect;
