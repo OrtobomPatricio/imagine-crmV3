@@ -9,60 +9,60 @@ import { normalizeContactPhone } from "../_core/phone";
 
 
 function unwrapBaileysMessage(msg: any): any {
-  // supports ephemeralMessage and viewOnceMessage wrappers
-  let m = msg;
-  for (let i = 0; i < 4; i++) {
-    if (!m) break;
-    if (m.ephemeralMessage?.message) { m = m.ephemeralMessage.message; continue; }
-    if (m.viewOnceMessage?.message) { m = m.viewOnceMessage.message; continue; }
-    if (m.viewOnceMessageV2?.message) { m = m.viewOnceMessageV2.message; continue; }
-    break;
-  }
-  return m;
+    // supports ephemeralMessage and viewOnceMessage wrappers
+    let m = msg;
+    for (let i = 0; i < 4; i++) {
+        if (!m) break;
+        if (m.ephemeralMessage?.message) { m = m.ephemeralMessage.message; continue; }
+        if (m.viewOnceMessage?.message) { m = m.viewOnceMessage.message; continue; }
+        if (m.viewOnceMessageV2?.message) { m = m.viewOnceMessageV2.message; continue; }
+        break;
+    }
+    return m;
 }
 
 async function streamToBuffer(stream: AsyncIterable<Uint8Array>): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) {
-    chunks.push(Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
 }
 
 async function maybeDownloadMedia(innerMessage: any, upsertType: 'append' | 'notify') {
-  // By default, avoid downloading media during history sync unless explicitly enabled
-  if (upsertType === 'append' && process.env.WA_MEDIA_DOWNLOAD_ON_SYNC !== '1') {
+    // By default, avoid downloading media during history sync unless explicitly enabled
+    if (upsertType === 'append' && process.env.WA_MEDIA_DOWNLOAD_ON_SYNC !== '1') {
+        return { mediaUrl: null, mediaMimeType: null, mediaName: null };
+    }
+
+    const m = innerMessage || {};
+    const map: Array<{ key: string; type: any; name: string }> = [
+        { key: 'imageMessage', type: 'image', name: 'image' },
+        { key: 'videoMessage', type: 'video', name: 'video' },
+        { key: 'audioMessage', type: 'audio', name: 'audio' },
+        { key: 'documentMessage', type: 'document', name: 'document' },
+        { key: 'stickerMessage', type: 'sticker', name: 'sticker' },
+    ];
+
+    for (const item of map) {
+        const msgObj = m[item.key];
+        if (!msgObj) continue;
+
+        const stream = await downloadContentFromMessage(msgObj, item.type);
+        const buffer = await streamToBuffer(stream);
+        const mimetype = (msgObj.mimetype as string | undefined) || null;
+        const filename = (msgObj.fileName as string | undefined) || (msgObj.file_name as string | undefined) || null;
+
+        const saved = saveBufferToUploads({
+            buffer,
+            originalname: filename || `${item.name}-${Date.now()}`,
+            mimetype,
+        });
+
+        return { mediaUrl: saved.url, mediaMimeType: mimetype, mediaName: filename || saved.originalname };
+    }
+
     return { mediaUrl: null, mediaMimeType: null, mediaName: null };
-  }
-
-  const m = innerMessage || {};
-  const map: Array<{ key: string; type: any; name: string }>= [
-    { key: 'imageMessage', type: 'image', name: 'image' },
-    { key: 'videoMessage', type: 'video', name: 'video' },
-    { key: 'audioMessage', type: 'audio', name: 'audio' },
-    { key: 'documentMessage', type: 'document', name: 'document' },
-    { key: 'stickerMessage', type: 'sticker', name: 'sticker' },
-  ];
-
-  for (const item of map) {
-    const msgObj = m[item.key];
-    if (!msgObj) continue;
-
-    const stream = await downloadContentFromMessage(msgObj, item.type);
-    const buffer = await streamToBuffer(stream);
-    const mimetype = (msgObj.mimetype as string | undefined) || null;
-    const filename = (msgObj.fileName as string | undefined) || (msgObj.file_name as string | undefined) || null;
-
-    const saved = saveBufferToUploads({
-      buffer,
-      originalname: filename || `${item.name}-${Date.now()}`,
-      mimetype,
-    });
-
-    return { mediaUrl: saved.url, mediaMimeType: mimetype, mediaName: filename || saved.originalname };
-  }
-
-  return { mediaUrl: null, mediaMimeType: null, mediaName: null };
 }
 export const MessageHandler = {
     async handleIncomingMessage(userId: number, message: any, upsertType: 'append' | 'notify' = 'notify') {
@@ -243,7 +243,7 @@ export const MessageHandler = {
                 createdAt: messageTimestamp
             });
 
-            console.log(`[MessageHandler] Saved ${upsertType} msg ${message.key.id} for Lead ${leadId}`);
+            console.log(`[MessageHandler] Saved ${upsertType} msg ${message.key.id} for Lead ${leadId} in Conversation ${conversationId}`);
 
         } catch (error) {
             console.error("Error handling incoming message:", error);
