@@ -525,7 +525,9 @@ export const conversations = mysqlTable("conversations", {
   status: mysqlEnum("status", ["active", "archived", "blocked"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  idxWhatsappLast: index("idx_conversations_whatsapp_last").on(t.whatsappNumberId, t.lastMessageAt),
+}));
 
 export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = typeof conversations.$inferInsert;
