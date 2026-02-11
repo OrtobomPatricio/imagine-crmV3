@@ -499,9 +499,14 @@ export const chatRouter = router({
                     throw err;
                 }
             } else {
-                // --- WHATSAPP SEND LOGIC ---
+                // --- WHATSAPP SEND LOGIC (QUEUED) ---
                 const whatsappNumberId = input.whatsappNumberId || conv.whatsappNumberId;
-                if (!whatsappNumberId) throw new Error("Falta whatsappNumberId");
+                if (!whatsappNumberId) {
+                    await db.update(chatMessages)
+                        .set({ status: 'failed', errorMessage: "Falta whatsappNumberId", failedAt: now })
+                        .where(eq(chatMessages.id, id));
+                    throw new Error("Falta whatsappNumberId");
+                }
 
                 // Lookup WhatsApp API connection
                 const connRows = await db.select()
@@ -510,194 +515,26 @@ export const chatRouter = router({
                     .limit(1);
                 const conn = connRows[0];
 
-                // Lock conversation to a single WhatsApp connection type to avoid Cloud/QR conflicts
+                // Update connection type if needed
                 if (conn?.connectionType) {
                     if (!conv.whatsappConnectionType) {
                         await db.update(conversations)
                             .set({ whatsappConnectionType: conn.connectionType as any })
                             .where(eq(conversations.id, conv.id));
-                        conv.whatsappConnectionType = conn.connectionType as any;
-                    } else if (conv.whatsappConnectionType !== (conn.connectionType as any)) {
-                        throw new Error(`Conflicto de canal: esta conversación es '${conv.whatsappConnectionType}' pero el número está en '${conn.connectionType}'.`);
                     }
                 }
 
-                if (!conn || !conn.isConnected) {
-                    return { id, success: true, queued: true } as const;
-                }
+                // Insert into Outbound Queue
+                const { messageQueue } = await import("../../drizzle/schema");
+                await db.insert(messageQueue).values({
+                    conversationId: input.conversationId,
+                    chatMessageId: id,
+                    priority: 0,
+                    status: 'queued',
+                    attempts: 0,
+                });
 
-                // === Baileys (QR) Logic ===
-                if (conn.connectionType === 'qr') {
-                    try {
-                        const { BaileysService } = await import("../services/baileys");
-
-                        let payload: any = {};
-                        if (input.messageType === 'text') {
-                            payload = { text: input.content || "" };
-                        } else if (['image', 'video', 'audio'].includes(input.messageType)) {
-                            payload = {
-                                [input.messageType]: { url: input.mediaUrl },
-                                caption: input.content
-                            };
-                        } else if (input.messageType === 'document') {
-                            payload = {
-                                document: { url: input.mediaUrl },
-                                mimetype: input.mediaMimeType || 'application/octet-stream',
-                                fileName: input.mediaName || 'document'
-                            };
-                        }
-
-                        const recipient = (conv.externalChatId || conv.contactPhone) as string;
-                        const result = await BaileysService.sendMessage(whatsappNumberId, recipient, payload);
-                        const waMessageId = result?.key?.id;
-
-                        await db.update(chatMessages)
-                            .set({
-                                status: 'sent',
-                                whatsappConnectionType: 'qr',
-                                whatsappMessageId: waMessageId,
-                                sentAt: now
-                            })
-                            .where(eq(chatMessages.id, id));
-
-                        return { id, success: true, sent: true, whatsappMessageId: waMessageId } as const;
-
-                    } catch (err: any) {
-                        const message = err?.message || "Failed to send via Baileys";
-                        await db.update(chatMessages)
-                            .set({ status: 'failed', errorMessage: message, failedAt: now })
-                            .where(eq(chatMessages.id, id));
-                        throw new Error(message);
-                    }
-                }
-
-                // === Cloud API Logic (Existing) ===
-                if (conn.connectionType !== 'api') {
-                    // Should have been handled above if qr, so this effectively catches unknown types
-                    return { id, success: true, queued: true } as const;
-                }
-
-                // Existing Cloud API Checks...
-                const token = decryptSecret(conn.accessToken ?? '') ?? (conn.accessToken ?? null);
-                if (!token) {
-                    await db.update(chatMessages)
-                        .set({ status: 'failed', errorMessage: 'Missing accessToken', failedAt: now })
-                        .where(eq(chatMessages.id, id));
-                    throw new Error('WhatsApp API no configurada (accessToken faltante)');
-                }
-                if (!conn.phoneNumberId) {
-                    await db.update(chatMessages)
-                        .set({ status: 'failed', errorMessage: 'Missing phoneNumberId', failedAt: now })
-                        .where(eq(chatMessages.id, id));
-                    throw new Error('WhatsApp API no configurada (phoneNumberId faltante)');
-                }
-
-                // Build Cloud API payload
-                const mt = input.messageType;
-                let payload: any;
-                let waMessageId: string | undefined;
-
-                try {
-                    if (mt === 'template') {
-                        if (!input.templateName) throw new Error("Missing templateName");
-                        const res = await sendCloudTemplate({
-                            accessToken: token,
-                            phoneNumberId: conn.phoneNumberId,
-                            to: toWhatsAppCloudTo(conv.contactPhone),
-                            templateName: input.templateName,
-                            languageCode: input.templateLanguage || "es",
-                            components: input.templateComponents,
-                        });
-                        waMessageId = res.messageId;
-
-                    } else {
-                        // Standard media/text
-                        if (mt === 'text') {
-                            const body = (input.content ?? '').trim();
-                            if (!body) throw new Error('El mensaje de texto está vacío');
-                            payload = { type: 'text', body };
-                        } else if (mt === 'image' || mt === 'video' || mt === 'audio') {
-                            if (!input.mediaUrl) throw new Error('Falta mediaUrl');
-                            payload = { type: mt, link: input.mediaUrl, caption: input.content || undefined };
-                        } else if (mt === 'document') {
-                            if (!input.mediaUrl) throw new Error('Falta mediaUrl');
-                            payload = {
-                                type: 'document',
-                                link: input.mediaUrl,
-                                caption: input.content || undefined,
-                                filename: input.mediaName || undefined,
-                            };
-                        } else if (mt === 'location') {
-                            if (input.latitude == null || input.longitude == null) throw new Error('Faltan coordenadas');
-                            payload = {
-                                type: 'location',
-                                latitude: input.latitude,
-                                longitude: input.longitude,
-                                name: input.locationName || undefined,
-                            };
-                        } else if (mt === 'sticker') {
-                            if (!input.mediaUrl) throw new Error('Falta mediaUrl');
-                            payload = { type: 'sticker', link: input.mediaUrl };
-                        } else if (mt === 'contact') {
-                            const vcard = (input.content ?? '').trim();
-                            if (!vcard) throw new Error('Falta vCard para contacto');
-                            payload = { type: 'contact', vcard };
-                        }
-
-                        // Send standard message
-                        const res = await sendCloudMessage({
-                            accessToken: token,
-                            phoneNumberId: conn.phoneNumberId,
-                            to: toWhatsAppCloudTo(conv.contactPhone),
-                            payload,
-                        });
-                        waMessageId = res.messageId;
-                    }
-
-                    // Update DB on success
-                    await db.update(chatMessages)
-                        .set({
-                            status: 'sent',
-                            whatsappConnectionType: 'api',
-                            whatsappMessageId: waMessageId,
-                            sentAt: now,
-                            errorMessage: null,
-                            failedAt: null,
-                        })
-                        .where(eq(chatMessages.id, id));
-
-                    // Bump counters
-                    await db.update(whatsappNumbers)
-                        .set({
-                            messagesSentToday: sql`${whatsappNumbers.messagesSentToday} + 1`,
-                            totalMessagesSent: sql`${whatsappNumbers.totalMessagesSent} + 1`,
-                            lastConnected: now,
-                        })
-                        .where(eq(whatsappNumbers.id, whatsappNumberId));
-
-                    void dispatchIntegrationEvent({
-                        whatsappNumberId: whatsappNumberId,
-                        event: "message_sent",
-                        data: {
-                            conversationId: input.conversationId,
-                            chatMessageId: id,
-                            whatsappMessageId: waMessageId,
-                            to: conv.contactPhone,
-                            messageType: mt,
-                            content: input.content ?? null,
-                            mediaUrl: input.mediaUrl ?? null,
-                        },
-                    });
-
-                    return { id, success: true, sent: true, whatsappMessageId: waMessageId } as const;
-
-                } catch (e: any) {
-                    const message = e?.message ? String(e.message) : 'Failed to send';
-                    await db.update(chatMessages)
-                        .set({ status: 'failed', errorMessage: message, failedAt: now })
-                        .where(eq(chatMessages.id, id));
-                    throw new Error(message);
-                }
+                return { id, success: true, queued: true };
             }
         }),
 

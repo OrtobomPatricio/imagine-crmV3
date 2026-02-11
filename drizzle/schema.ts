@@ -557,10 +557,33 @@ export const chatMessages = mysqlTable("chat_messages", {
   deliveredAt: timestamp("deliveredAt"),
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (t) => ({
+  // Idempotency: prevent same WA message in same conversation
+  uniqWaMessage: uniqueIndex("uniq_wa_message").on(t.whatsappMessageId, t.conversationId),
+}));
 
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = typeof chatMessages.$inferInsert;
+
+/**
+ * Outbound Message Queue for "Industrial" reliability
+ */
+export const messageQueue = mysqlTable("message_queue", {
+  id: int("id").autoincrement().primaryKey(),
+  conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  // Link to the actual chat message (it should be created in 'pending' state first)
+  chatMessageId: int("chatMessageId").references(() => chatMessages.id, { onDelete: "cascade" }),
+  priority: int("priority").default(0).notNull(), // 0=normal, 1=high
+  status: mysqlEnum("status", ["queued", "processing", "sent", "failed"]).default("queued").notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  nextAttemptAt: timestamp("nextAttemptAt").defaultNow().notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MessageQueueItem = typeof messageQueue.$inferSelect;
+export type InsertMessageQueueItem = typeof messageQueue.$inferInsert;
 
 /**
  * WhatsApp connection settings (API or QR)

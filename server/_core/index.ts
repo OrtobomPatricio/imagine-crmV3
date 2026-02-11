@@ -271,6 +271,11 @@ async function startServer() {
     startLogCleanup();
     startAutoBackup();
     startSessionCleanup();
+    // Start Message Queue Worker
+    import("../services/queue-worker").then(({ MessageQueueWorker }) => {
+      MessageQueueWorker.getInstance().start();
+    }).catch(err => logger.error({ err: safeError(err) }, "[MessageQueue] startup failed"));
+
     // Restore WhatsApp Sessions
     import("../services/whatsapp-restorer").then(({ startWhatsAppSessions }) => {
       startWhatsAppSessions().catch(err => logger.error({ err: safeError(err) }, "[WhatsAppSession] startup failed"));

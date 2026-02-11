@@ -22,6 +22,10 @@ interface ConnectionState {
 const connections: Map<number, ConnectionState> = new Map();
 
 export const BaileysService = {
+    getSocket(userId: number) {
+        return connections.get(userId)?.socket;
+    },
+
     async initializeSession(userId: number, onQrUpdate: (qr: string) => void, onStatusUpdate: (status: string) => void) {
         const sessionName = `session_${userId}`;
         const sessionPath = path.join(SESSIONS_DIR, sessionName);
