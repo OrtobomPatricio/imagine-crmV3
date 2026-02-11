@@ -82,6 +82,7 @@ export const BaileysService = {
                     // Check if it's a message from another user (not us)
                     if (!msg.key.fromMe) {
                         try {
+                            console.log("Baileys: Invoking MessageHandler for msg:", msg.key.id);
                             const { MessageHandler } = await import("./message-handler");
                             // Pass the upsert type (notify vs append) to handle history correctly
                             await MessageHandler.handleIncomingMessage(userId, msg, m.type);

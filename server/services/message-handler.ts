@@ -66,8 +66,9 @@ async function maybeDownloadMedia(innerMessage: any, upsertType: 'append' | 'not
 }
 export const MessageHandler = {
     async handleIncomingMessage(userId: number, message: any, upsertType: 'append' | 'notify' = 'notify') {
+        console.log(`[MessageHandler] Received ${upsertType} msg ${message.key?.id} from ${message.key?.remoteJid}`);
         const db = await getDb();
-        if (!db) return;
+        if (!db) { console.error("[MessageHandler] No DB connection"); return; }
 
         // Skip strange messages (status broadcasts, etc)
         const jid = message.key.remoteJid;
