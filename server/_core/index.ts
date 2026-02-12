@@ -308,7 +308,11 @@ const run = async () => {
   await ensureAppSettings();
 };
 
-run().catch((e) => { logger.fatal({ err: safeError(e) }, 'startup failed'); process.exit(1); });
+// Only run if called directly (not imported)
+import { fileURLToPath } from 'url';
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  run().catch((e) => { logger.fatal({ err: safeError(e) }, 'startup failed'); process.exit(1); });
+}
 
 async function ensureAppSettings() {
   const db = await getDb();
