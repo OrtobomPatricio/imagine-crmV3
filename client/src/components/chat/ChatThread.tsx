@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { FileText, Paperclip, Send, MapPin, X, ArrowDown, RefreshCw, Loader2 } from "lucide-react";
+import { FileText, Paperclip, Send, MapPin, X, ArrowDown, RefreshCw, Loader2, Check, CheckCheck, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -87,6 +87,9 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   const [sendQueue, setSendQueue] = useState<SendQueueItem[]>([]);
   const sendQueueRef = useRef<SendQueueItem[]>([]);
   const isProcessingQueueRef = useRef(false);
+
+  // Typing indicator (simulated client-side for now)
+  const [isContactTyping, setIsContactTyping] = useState(false);
 
   useEffect(() => {
     sendQueueRef.current = sendQueue;
@@ -401,7 +404,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
     if (xhr) {
       try {
         xhr.abort();
-      } catch {}
+      } catch { }
     }
     delete uploadXhrByIdRef.current[id];
     delete uploadFileByIdRef.current[id];
@@ -696,8 +699,23 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
 
               {sortedMessages.map((msg: any) => {
                 const isOutgoing = msg.direction === "outbound";
-                const statusGlyph =
-                  msg.status === "failed" ? "⚠" : msg.status === "delivered" || msg.status === "read" ? "✓✓" : "✓";
+
+                // Render proper status icon based on read/delivered/sent
+                const getStatusIcon = () => {
+                  if (msg.status === "failed") {
+                    return <span className="text-red-400">⚠</span>;
+                  }
+                  if (msg.readAt) {
+                    return <CheckCheck className="w-3.5 h-3.5 text-blue-500" />;
+                  }
+                  if (msg.deliveredAt) {
+                    return <CheckCheck className="w-3.5 h-3.5 opacity-60" />;
+                  }
+                  if (msg.sentAt || msg.status === "sent") {
+                    return <Check className="w-3.5 h-3.5 opacity-60" />;
+                  }
+                  return <Clock className="w-3.5 h-3.5 opacity-40" />;
+                };
 
                 return (
                   <div
@@ -706,23 +724,37 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
                     data-testid={`message-${msg.id}`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        isOutgoing ? "bg-primary text-primary-foreground" : "bg-muted"
-                      }`}
+                      className={`max-w-[80%] rounded-lg p-3 ${isOutgoing ? "bg-primary text-primary-foreground" : "bg-muted"
+                        }`}
                     >
                       <div className="text-sm">{renderMessageBody(msg)}</div>
                       <div
-                        className={`text-xs mt-1 ${
-                          isOutgoing ? "text-primary-foreground/70" : "text-muted-foreground"
-                        } flex items-center gap-1 justify-end`}
+                        className={`text-xs mt-1 ${isOutgoing ? "text-primary-foreground/70" : "text-muted-foreground"
+                          } flex items-center gap-1 justify-end`}
                       >
                         {format(new Date(msg.createdAt), "HH:mm")}
-                        {isOutgoing && <span className="ml-1">{statusGlyph}</span>}
+                        {isOutgoing && <span className="ml-1">{getStatusIcon()}</span>}
                       </div>
                     </div>
                   </div>
                 );
               })}
+
+              {/* Typing Indicator */}
+              {isContactTyping && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-lg p-3 bg-muted">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                      <span className="text-xs text-muted-foreground">escribiendo...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
           <div ref={messagesEndRef} />

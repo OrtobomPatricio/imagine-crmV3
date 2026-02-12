@@ -16,10 +16,14 @@ interface ConnectionState {
     status: 'connecting' | 'connected' | 'disconnected' | 'qr_ready';
     qr?: string;
     socket?: WASocket;
+    typingJids?: Set<string>; // Track who is typing
 }
 
 // In-memory store for active connections
 const connections: Map<number, ConnectionState> = new Map();
+
+// Typing state cleanup timers
+const typingTimers: Map<string, NodeJS.Timeout> = new Map();
 
 export const BaileysService = {
     getSocket(userId: number) {
@@ -75,6 +79,52 @@ export const BaileysService = {
             } else if (connection === 'open') {
                 connections.set(userId, { ...connections.get(userId)!, status: 'connected', qr: undefined });
                 onStatusUpdate('connected');
+            }
+        });
+
+        // Typing Indicators
+        sock.ev.on('presence.update', (update) => {
+            const jid = update.id;
+            const presences = update.presences || {};
+
+            // Check if any participant is composing
+            const isTyping = Object.values(presences).some(
+                (p: any) => p.lastKnownPresence === 'composing'
+            );
+
+            const conn = connections.get(userId);
+            if (conn) {
+                if (!conn.typingJids) conn.typingJids = new Set();
+
+                if (isTyping) {
+                    conn.typingJids.add(jid);
+
+                    // Auto-clear after 3 seconds
+                    const timerKey = `${userId}-${jid}`;
+                    if (typingTimers.has(timerKey)) {
+                        clearTimeout(typingTimers.get(timerKey)!);
+                    }
+                    typingTimers.set(timerKey, setTimeout(() => {
+                        conn.typingJids?.delete(jid);
+                        typingTimers.delete(timerKey);
+                    }, 3000));
+                } else {
+                    conn.typingJids.delete(jid);
+                }
+            }
+        });
+
+        // Read Receipts
+        sock.ev.on('messages.update', async (updates) => {
+            for (const update of updates) {
+                if (update.update.status === 3) { // Status 3 = read
+                    try {
+                        const { MessageHandler } = await import("./message-handler");
+                        await MessageHandler.handleMessageUpdate(userId, update.key.id!, 'read');
+                    } catch (e) {
+                        console.error("Baileys: Error updating message status", e);
+                    }
+                }
             }
         });
 
@@ -165,5 +215,15 @@ export const BaileysService = {
 
     getQr(userId: number) {
         return connections.get(userId)?.qr;
+    },
+
+    getTypingStatus(userId: number, jid: string) {
+        const conn = connections.get(userId);
+        return conn?.typingJids?.has(jid) || false;
+    },
+
+    getAllTypingJids(userId: number) {
+        const conn = connections.get(userId);
+        return Array.from(conn?.typingJids || []);
     }
 };

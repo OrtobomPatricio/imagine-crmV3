@@ -65,6 +65,26 @@ async function maybeDownloadMedia(innerMessage: any, upsertType: 'append' | 'not
     return { mediaUrl: null, mediaMimeType: null, mediaName: null };
 }
 export const MessageHandler = {
+    async handleMessageUpdate(userId: number, whatsappMessageId: string, status: 'read' | 'delivered') {
+        console.log(`[MessageHandler] Updating message ${whatsappMessageId} status to ${status}`);
+        const db = await getDb();
+        if (!db) { console.error("[MessageHandler] No DB connection"); return; }
+
+        const updates: any = {};
+        if (status === 'read') {
+            updates.readAt = new Date();
+        } else if (status === 'delivered') {
+            updates.deliveredAt = new Date();
+        }
+
+        await db.update(chatMessages)
+            .set(updates)
+            .where(and(
+                eq(chatMessages.whatsappMessageId, whatsappMessageId),
+                eq(chatMessages.whatsappNumberId, userId)
+            ));
+    },
+
     async handleIncomingMessage(userId: number, message: any, upsertType: 'append' | 'notify' = 'notify') {
         console.log(`[MessageHandler] Received ${upsertType} msg ${message.key?.id} from ${message.key?.remoteJid}`);
         const db = await getDb();
