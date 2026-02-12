@@ -30,6 +30,7 @@ import Login from "./pages/Login";
 import SetupAccount from "./pages/SetupAccount";
 import { useAuth } from "./_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 function Router() {
   const { isAuthenticated, loading } = useAuth();
@@ -88,6 +89,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <SpeedInsights />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
