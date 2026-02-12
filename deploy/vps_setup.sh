@@ -25,6 +25,7 @@ echo "🔄 Descargando últimos cambios..."
 git pull origin main
 
 # 3. Setup Environment & URL
+# 3. Setup Environment & URL
 current_ip=$(curl -s ifconfig.me || echo "localhost")
 echo "🌍 Configuración de Dominio/URL"
 echo "---------------------------------------------------"
@@ -38,14 +39,26 @@ USER_URL=${USER_URL%/}
 
 echo "✅ Usando URL: ${USER_URL}"
 
-if [ ! -f ".env" ]; then
-    echo "⚙️  Archivo .env no encontrado. Generando nuevo..."
+# Variables defaults
+JWT_SEC=$(openssl rand -hex 32)
+ENC_KEY=$(openssl rand -hex 32)
+DB_PASS=$(openssl rand -hex 16)
+
+# Try to preserve secrets from existing .env
+if [ -f ".env" ]; then
+    echo "♻️  Preservando contraseñas de .env anterior..."
+    # Extract values ignoring whitespace/comments
+    EXISTING_DB_PASS=$(grep '^DB_PASS=' .env | cut -d '=' -f2- | tr -d ' "\r')
+    EXISTING_JWT=$(grep '^JWT_SECRET=' .env | cut -d '=' -f2- | tr -d ' "\r')
+    EXISTING_ENC=$(grep '^DATA_ENCRYPTION_KEY=' .env | cut -d '=' -f2- | tr -d ' "\r')
     
-    JWT_SEC=$(openssl rand -hex 32)
-    ENC_KEY=$(openssl rand -hex 32)
-    DB_PASS=$(openssl rand -hex 16)
-    
-    cat <<EOF > .env
+    if [ ! -z "$EXISTING_DB_PASS" ]; then DB_PASS=$EXISTING_DB_PASS; fi
+    if [ ! -z "$EXISTING_JWT" ]; then JWT_SEC=$EXISTING_JWT; fi
+    if [ ! -z "$EXISTING_ENC" ]; then ENC_KEY=$EXISTING_ENC; fi
+fi
+
+echo "📝 Generando archivo .env limpio..."
+cat <<EOF > .env
 # ==========================================
 # CONFIGURACIÓN PRODUCCIÓN (AUTO)
 # ==========================================
@@ -73,13 +86,7 @@ MYSQL_USER=crm
 MYSQL_PASSWORD=${DB_PASS}
 EOF
 
-else
-    echo "🔄 Actualizando .env existente con la nueva URL..."
-    sed -i "s|CLIENT_URL=.*|CLIENT_URL=${USER_URL}|" .env
-    sed -i "s|VITE_API_URL=.*|VITE_API_URL=${USER_URL}/api|" .env
-    sed -i "s|VITE_OAUTH_PORTAL_URL=.*|VITE_OAUTH_PORTAL_URL=${USER_URL}|" .env
-    sed -i "s|OAUTH_SERVER_URL=.*|OAUTH_SERVER_URL=${USER_URL}|" .env
-fi
+echo "✅ Archivo .env actualizado correctamente."
 
 # 4. Build and Run
 echo "🏗️  Construyendo la aplicación..."
