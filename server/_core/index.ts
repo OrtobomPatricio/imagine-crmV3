@@ -60,12 +60,16 @@ export async function createApp() {
   await assertDbConstraints();
 
   const sentryDsn = process.env.SENTRY_DSN;
+
   if (sentryDsn) {
     try {
       Sentry.init({
         dsn: sentryDsn,
         environment: process.env.NODE_ENV || "development",
         tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0),
+        integrations: [
+          // nodeProfilingIntegration(),
+        ],
       });
       logger.info("sentry enabled");
     } catch (e) {
