@@ -125,8 +125,8 @@ export async function createApp() {
       if (allowedOrigins.includes(normalize(origin))) {
         callback(null, true);
       } else {
-        logger.warn({ origin }, "cors blocked");
-        callback(new Error("Not allowed by CORS"));
+        logger.warn({ origin, allowedOrigins }, "cors blocked - origin mismatch");
+        callback(new Error(`Not allowed by CORS. Origin: ${origin}. Allowed: ${allowedOrigins.join(", ")}`));
       }
     },
     credentials: true,
