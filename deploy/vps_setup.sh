@@ -59,9 +59,21 @@ if [ -f ".env" ]; then
     EXISTING_JWT=$(grep '^JWT_SECRET=' .env | cut -d '=' -f2- | tr -d ' "\r')
     EXISTING_ENC=$(grep '^DATA_ENCRYPTION_KEY=' .env | cut -d '=' -f2- | tr -d ' "\r')
     
+    # OAuth Preservation
+    EXISTING_G_ID=$(grep '^GOOGLE_CLIENT_ID=' .env | cut -d '=' -f2- | tr -d ' "\r')
+    EXISTING_G_SEC=$(grep '^GOOGLE_CLIENT_SECRET=' .env | cut -d '=' -f2- | tr -d ' "\r')
+    EXISTING_M_ID=$(grep '^MICROSOFT_CLIENT_ID=' .env | cut -d '=' -f2- | tr -d ' "\r')
+    EXISTING_M_SEC=$(grep '^MICROSOFT_CLIENT_SECRET=' .env | cut -d '=' -f2- | tr -d ' "\r')
+
     if [ ! -z "$EXISTING_DB_PASS" ]; then DB_PASS=$EXISTING_DB_PASS; fi
     if [ ! -z "$EXISTING_JWT" ]; then JWT_SEC=$EXISTING_JWT; fi
     if [ ! -z "$EXISTING_ENC" ]; then ENC_KEY=$EXISTING_ENC; fi
+    
+    # Set OAuth vars if found
+    GOOGLE_CLIENT_ID=${EXISTING_G_ID:-}
+    GOOGLE_CLIENT_SECRET=${EXISTING_G_SEC:-}
+    MICROSOFT_CLIENT_ID=${EXISTING_M_ID:-}
+    MICROSOFT_CLIENT_SECRET=${EXISTING_M_SEC:-}
 fi
 
 echo "📝 Generando archivo .env limpio..."
