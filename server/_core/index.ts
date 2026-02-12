@@ -52,7 +52,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-async function startServer() {
+export async function createApp() {
   // CRITICAL: Validate production secrets BEFORE starting server
   validateProductionSecrets();
 
@@ -232,16 +232,6 @@ async function startServer() {
     serveStatic(app);
   }
 
-  // Start Server
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = process.env.NODE_ENV === "production"
-    ? preferredPort
-    : await findAvailablePort(preferredPort);
-
-  if (port !== preferredPort) {
-    logger.warn({ preferredPort, port }, "port busy, using alternative");
-  }
-
   // Global Error Handler
   app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const requestId = (req as any).requestId;
@@ -260,6 +250,22 @@ async function startServer() {
       res.status(500).send("Internal Application Error");
     }
   });
+
+  return app;
+}
+
+async function startServer() {
+  const app = await createApp();
+
+  // Start Server
+  const preferredPort = parseInt(process.env.PORT || "3000");
+  const port = process.env.NODE_ENV === "production"
+    ? preferredPort
+    : await findAvailablePort(preferredPort);
+
+  if (port !== preferredPort) {
+    logger.warn({ preferredPort, port }, "port busy, using alternative");
+  }
 
   const httpServer = createServer(app);
   httpServer.listen(port, "0.0.0.0", () => {
