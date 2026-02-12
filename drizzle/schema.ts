@@ -324,24 +324,7 @@ export const campaignRecipients = mysqlTable("campaign_recipients", {
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
 export type InsertCampaignRecipient = typeof campaignRecipients.$inferInsert;
 
-/**
- * Conversation messages between leads and WhatsApp numbers
- */
-export const messages = mysqlTable("messages", {
-  id: int("id").autoincrement().primaryKey(),
-  leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
-  whatsappNumberId: int("whatsappNumberId").notNull().references(() => whatsappNumbers.id, { onDelete: "cascade" }),
-  direction: mysqlEnum("direction", ["inbound", "outbound"]).notNull(),
-  content: text("content").notNull(),
-  status: mysqlEnum("status", ["pending", "sent", "delivered", "read", "failed"]).default("pending").notNull(),
-  sentAt: timestamp("sentAt"),
-  deliveredAt: timestamp("deliveredAt"),
-  readAt: timestamp("readAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
 
-export type Message = typeof messages.$inferSelect;
-export type InsertMessage = typeof messages.$inferInsert;
 
 /**
  * Activity log for tracking actions

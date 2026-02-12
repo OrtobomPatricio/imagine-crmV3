@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { permissionProcedure, protectedProcedure, router } from "../_core/trpc";
 import { dispatchIntegrationEvent } from "../_core/integrationDispatch";
 import { leadsToCSV, parseCSV, importLeadsFromCSV } from "../services/backup";
+import { COMMISSION_RATES } from "../../shared/const";
 
 // E.164 Regex (basic)
 const PHONE_REGEX = /^\+?[1-9]\d{7,14}$/;
@@ -119,9 +120,9 @@ export const leadsRouter = router({
 
                 // Commission logic
                 const countryLower = input.country.toLowerCase();
-                const commission = (countryLower === 'panamá' || countryLower === 'panama')
-                    ? '10000.00'
-                    : '5000.00';
+                const commission = (countryLower.includes('panama') || countryLower.includes('panamá'))
+                    ? COMMISSION_RATES.PANAMA
+                    : COMMISSION_RATES.DEFAULT;
 
                 const result = await tx.insert(leads).values({
                     ...input,
@@ -216,7 +217,7 @@ export const leadsRouter = router({
 
                 if (data.country) {
                     const c = data.country.toLowerCase();
-                    (data as Record<string, unknown>).commission = (c === 'panamá' || c === 'panama') ? '10000.00' : '5000.00';
+                    (data as Record<string, unknown>).commission = (c.includes('panama') || c.includes('panamá')) ? COMMISSION_RATES.PANAMA : COMMISSION_RATES.DEFAULT;
                 }
 
                 if (data.value !== undefined) {
