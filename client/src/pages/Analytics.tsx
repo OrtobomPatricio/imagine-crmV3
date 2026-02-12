@@ -42,7 +42,7 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-5 lg:w-[500px]">
           <TabsTrigger value="overview">General</TabsTrigger>
           <TabsTrigger value="commissions">Comisiones</TabsTrigger>
           <TabsTrigger value="goals">Metas</TabsTrigger>
