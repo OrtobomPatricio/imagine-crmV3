@@ -42,7 +42,7 @@ if [ ! -f ".env" ]; then
 # ==========================================
 NODE_ENV=production
 # Conexion interna docker
-DATABASE_URL=mysql://root:${DB_PASS}@mysql:3306/chin_crm
+DATABASE_URL=mysql://crm:${DB_PASS}@mysql:3306/chin_crm
 
 # --- SEGURIDAD ---
 JWT_SECRET=${JWT_SEC}
@@ -58,11 +58,11 @@ ALLOW_DEV_LOGIN=0
 VITE_DEV_BYPASS_AUTH=0
 
 # --- DB ---
-DB_USER=root
+DB_USER=crm
 DB_PASS=${DB_PASS}
 DB_NAME=chin_crm
 MYSQL_ROOT_PASSWORD=${DB_PASS}
-MYSQL_USER=root
+MYSQL_USER=crm
 MYSQL_PASSWORD=${DB_PASS}
 
 # --- DOMINIO / IP ---
