@@ -1,18 +1,7 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "api/index.ts",
-            "use": "@vercel/node"
-        },
-        {
-            "src": "package.json",
-            "use": "@vercel/static-build",
-            "config": {
-                "distDir": "dist/public"
-            }
-        }
-    ],
+    "buildCommand": "corepack enable && corepack prepare pnpm@10.4.1 --activate && pnpm install --no-frozen-lockfile && pnpm run build",
+    "outputDirectory": "dist/public",
     "rewrites": [
         {
             "source": "/api/(.*)",
