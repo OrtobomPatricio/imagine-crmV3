@@ -24,15 +24,6 @@ fi
 echo "🔄 Descargando últimos cambios..."
 git pull origin main
 
-# 3. Setup Environment
-if [ ! -f ".env" ]; then
-    echo "⚙️  Detectado entorno nuevo. Generando configuración segura AUTOMÁTICA..."
-    
-    # Geneacion de secretos
-    JWT_SEC=$(openssl rand -hex 32)
-    ENC_KEY=$(openssl rand -hex 32)
-    DB_PASS=$(openssl rand -hex 16)
-    
 # 3. Setup Environment & URL
 current_ip=$(curl -s ifconfig.me || echo "localhost")
 echo "🌍 Configuración de Dominio/URL"
@@ -106,7 +97,10 @@ echo "🔧 Ejecutando reparaciones de base de datos..."
 docker compose exec app node dist/migrate.js || echo "⚠️ Migración estándar falló (continuando con plan B)..."
 
 # Force Create Table (Plan B) just in case
-docker compose exec mysql mysql -u crm -p$(grep DB_PASS .env | cut -d '=' -f2) -D chin_crm -e "
+# Extract DB Pass safely
+DB_PASS_VAL=$(grep DB_PASS .env | cut -d '=' -f2)
+
+docker compose exec mysql mysql -u crm -p${DB_PASS_VAL} -D chin_crm -e "
 CREATE TABLE IF NOT EXISTS message_queue (
     id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
     conversationId int NOT NULL,
