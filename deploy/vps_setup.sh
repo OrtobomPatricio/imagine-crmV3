@@ -27,12 +27,19 @@ git pull origin main
 # 3. Setup Environment & URL
 # 3. Setup Environment & URL
 current_ip=$(curl -s ifconfig.me || echo "localhost")
-echo "🌍 Configuración de Dominio/URL"
-echo "---------------------------------------------------"
-echo "Si usas un dominio como 'nip.io' o HTTPS, ingrésalo completo."
-echo "Ejemplos: 'https://mi-empresa.nip.io', 'http://${current_ip}:3000'"
-read -p "👉 Ingresa la URL PÚBLICA de tu CRM [http://${current_ip}:3000]: " USER_URL
-USER_URL=${USER_URL:-http://${current_ip}:3000}
+
+# ARGUMENT OVERRIDE: Check if URL was passed as argument
+if [ -n "$1" ]; then
+    USER_URL="$1"
+    echo "🌍 Usando URL proporcionada por argumento: ${USER_URL}"
+else
+    echo "🌍 Configuración de Dominio/URL"
+    echo "---------------------------------------------------"
+    echo "Si usas un dominio como 'nip.io' o HTTPS, ingrésalo completo."
+    echo "Ejemplos: 'https://mi-empresa.nip.io', 'http://${current_ip}:3000'"
+    read -p "👉 Ingresa la URL PÚBLICA de tu CRM [http://${current_ip}:3000]: " USER_URL
+    USER_URL=${USER_URL:-http://${current_ip}:3000}
+fi
 
 # Remove trailing slash
 USER_URL=${USER_URL%/}
