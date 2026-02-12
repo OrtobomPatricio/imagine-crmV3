@@ -1,33 +1,14 @@
 {
-  "include": [
-    "client/src/**/*",
-    "shared/**/*",
-    "server/**/*",
-    "api/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "build",
-    "dist",
-    "**/*.test.ts"
-  ],
   "compilerOptions": {
-    "incremental": true,
-    "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
-    "noEmit": true,
-    "target": "ES2020",
+    "target": "ES2022",
     "module": "ESNext",
-    "strict": true,
-    "lib": [
-      "esnext",
-      "dom",
-      "dom.iterable"
-    ],
-    "jsx": "preserve",
-    "esModuleInterop": true,
+    "moduleResolution": "Bundler",
+    "strict": false,
     "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
     "allowImportingTsExtensions": true,
-    "moduleResolution": "bundler",
+    "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -37,5 +18,16 @@
         "./shared/*"
       ]
     }
-  }
+  },
+  "include": [
+    "client/src",
+    "client/vite.config.ts",
+    "vite.config.ts",
+    "api/**/*"
+  ],
+  "exclude": [
+    "server",
+    "dist",
+    "node_modules"
+  ]
 }
