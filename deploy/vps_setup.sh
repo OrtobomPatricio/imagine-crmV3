@@ -33,31 +33,45 @@ if [ ! -f ".env" ]; then
     ENC_KEY=$(openssl rand -hex 32)
     DB_PASS=$(openssl rand -hex 16)
     
-    # Detectar IP Publica
-    PUBLIC_IP=$(curl -s ifconfig.me || echo "localhost")
+# 3. Setup Environment & URL
+current_ip=$(curl -s ifconfig.me || echo "localhost")
+echo "🌍 Configuración de Dominio/URL"
+echo "---------------------------------------------------"
+echo "Si usas un dominio como 'nip.io' o HTTPS, ingrésalo completo."
+echo "Ejemplos: 'https://mi-empresa.nip.io', 'http://${current_ip}:3000'"
+read -p "👉 Ingresa la URL PÚBLICA de tu CRM [http://${current_ip}:3000]: " USER_URL
+USER_URL=${USER_URL:-http://${current_ip}:3000}
+
+# Remove trailing slash
+USER_URL=${USER_URL%/}
+
+echo "✅ Usando URL: ${USER_URL}"
+
+if [ ! -f ".env" ]; then
+    echo "⚙️  Archivo .env no encontrado. Generando nuevo..."
+    
+    JWT_SEC=$(openssl rand -hex 32)
+    ENC_KEY=$(openssl rand -hex 32)
+    DB_PASS=$(openssl rand -hex 16)
     
     cat <<EOF > .env
 # ==========================================
-# CONFIGURACIÓN PRODUCCIÓN (GENERADA AUTO)
+# CONFIGURACIÓN PRODUCCIÓN (AUTO)
 # ==========================================
 NODE_ENV=production
-# Conexion interna docker
 DATABASE_URL=mysql://crm:${DB_PASS}@mysql:3306/chin_crm
-
-# --- SEGURIDAD ---
 JWT_SECRET=${JWT_SEC}
 DATA_ENCRYPTION_KEY=${ENC_KEY}
-
-# --- USUARIO ADMIN ---
-# Valor temporal para permitir el arranque.
-# Despues de loguearte, cambia esto por tu ID real.
 OWNER_OPEN_ID=admin-temporal
-
-# --- OPCIONES ---
-ALLOW_DEV_LOGIN=0
 ALLOW_DEV_LOGIN=0
 VITE_DEV_BYPASS_AUTH=0
 RUN_MIGRATIONS=1
+
+# --- URLS ---
+CLIENT_URL=${USER_URL}
+VITE_API_URL=${USER_URL}/api
+VITE_OAUTH_PORTAL_URL=${USER_URL}
+OAUTH_SERVER_URL=${USER_URL}
 
 # --- DB ---
 DB_USER=crm
@@ -66,29 +80,50 @@ DB_NAME=chin_crm
 MYSQL_ROOT_PASSWORD=${DB_PASS}
 MYSQL_USER=crm
 MYSQL_PASSWORD=${DB_PASS}
-
-# --- DOMINIO / IP ---
-VITE_OAUTH_PORTAL_URL=http://${PUBLIC_IP}:3000
-OAUTH_SERVER_URL=http://${PUBLIC_IP}:3000
 EOF
 
-    echo "✅ Archivo .env generado con contraseñas seguras."
-    echo "🔑 Tu contraseña de base de datos es: ${DB_PASS}"
+else
+    echo "🔄 Actualizando .env existente con la nueva URL..."
+    sed -i "s|CLIENT_URL=.*|CLIENT_URL=${USER_URL}|" .env
+    sed -i "s|VITE_API_URL=.*|VITE_API_URL=${USER_URL}/api|" .env
+    sed -i "s|VITE_OAUTH_PORTAL_URL=.*|VITE_OAUTH_PORTAL_URL=${USER_URL}|" .env
+    sed -i "s|OAUTH_SERVER_URL=.*|OAUTH_SERVER_URL=${USER_URL}|" .env
 fi
 
 # 4. Build and Run
-echo "🏗️  Construyendo la aplicación (esto puede tardar unos minutos)..."
-# Force cleanup of old attempts
+echo "🏗️  Construyendo la aplicación..."
 docker compose down --remove-orphans || true
-
-# Build fresh
 docker compose build --no-cache
-
-echo "🚀 Levantando servicios..."
 docker compose up -d
 
+echo "⏳ Esperando a que la base de datos inicie (10s)..."
+sleep 10
+
+# 5. Force Fixes (Database)
+echo "🔧 Ejecutando reparaciones de base de datos..."
+
+# Run Standard Migration
+docker compose exec app node dist/migrate.js || echo "⚠️ Migración estándar falló (continuando con plan B)..."
+
+# Force Create Table (Plan B) just in case
+docker compose exec mysql mysql -u crm -p$(grep DB_PASS .env | cut -d '=' -f2) -D chin_crm -e "
+CREATE TABLE IF NOT EXISTS message_queue (
+    id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+    conversationId int NOT NULL,
+    chatMessageId int,
+    priority int NOT NULL DEFAULT 0,
+    status enum('queued','processing','sent','failed') NOT NULL DEFAULT 'queued',
+    attempts int NOT NULL DEFAULT 0,
+    nextAttemptAt timestamp NOT NULL DEFAULT (now()),
+    errorMessage text,
+    createdAt timestamp NOT NULL DEFAULT (now()),
+    updatedAt timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (conversationId) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (chatMessageId) REFERENCES chat_messages(id) ON DELETE CASCADE
+);" 2>/dev/null
+
 echo "---------------------------------------------------"
-echo "✅ ¡Despliegue finalizado exitosamente!"
-echo "📡 Tu CRM debería estar activo en: http://$(curl -s ifconfig.me):3000"
+echo "✅ ¡Despliegue finalizado!"
+echo "📡 Accede a tu CRM en: ${USER_URL}"
 echo "---------------------------------------------------"
 echo "📝 Si algo falla, revisa los logs con: docker compose logs -f"
