@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { messageQueue, chatMessages, whatsappConnections, whatsappNumbers, conversations } from "../../drizzle/schema";
 import { BaileysService } from "./baileys";
 import { logger, safeError } from "../_core/logger";
+import path from "path";
 
 // Constants
 const MAX_RETRIES = 5;
@@ -189,8 +190,26 @@ export class MessageQueueWorker {
             if (chatMessage.messageType === 'text') {
                 sentMsg = await sock.sendMessage(jid, { text: chatMessage.content || "" });
             } else if (chatMessage.messageType === 'image' && chatMessage.mediaUrl) {
+                // Fix: Resolve local file path from URL
+                // URL: /api/uploads/filename.png -> File: /app/dist/public/uploads/filename.png
+                // Locally: public/uploads/filename.png
+                let filePath = chatMessage.mediaUrl;
+
+                // If path starts with /api/uploads, map it to the physical directory
+                if (filePath.startsWith('/api/uploads/')) {
+                    const filename = filePath.split('/').pop();
+                    // Determine uploads dir based on environment
+                    const uploadDir = process.env.NODE_ENV === 'production'
+                        ? '/app/dist/public/uploads'
+                        : path.resolve(process.cwd(), 'public', 'uploads');
+
+                    filePath = path.join(uploadDir, filename);
+                }
+
+                logger.info(`[QueueWorker] Sending image from: ${filePath}`);
+
                 sentMsg = await sock.sendMessage(jid, {
-                    image: { url: chatMessage.mediaUrl },
+                    image: { url: filePath }, // Baileys supports file path in url field for local files
                     caption: chatMessage.content || ""
                 });
             } else {
