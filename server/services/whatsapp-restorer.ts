@@ -39,7 +39,7 @@ export async function startWhatsAppSessions() {
                         const db = await getDb();
                         if (db) {
                             await db.update(whatsappConnections)
-                                .set({ isConnected: false })
+                                .set({ isConnected: false, qrCode: qr, qrExpiresAt: new Date(Date.now() + 60000) })
                                 .where(eq(whatsappConnections.id, conn.id));
 
                             await db.update(whatsappNumbers)
@@ -47,7 +47,26 @@ export async function startWhatsAppSessions() {
                                 .where(eq(whatsappNumbers.id, conn.whatsappNumberId!));
                         }
                     },
-                    (status) => console.log(`[WhatsAppSession] Status Update for ${conn.whatsappNumberId}: ${status}`)
+                    async (status) => {  // ✅ Ahora es async y actualiza DB
+                        console.log(`[WhatsAppSession] Status Update for ${conn.whatsappNumberId}: ${status}`);
+                        const db = await getDb();
+                        if (db) {
+                            const isConnected = status === 'connected';
+                            await db.update(whatsappConnections)
+                                .set({
+                                    isConnected,
+                                    lastPingAt: new Date(),
+                                    ...(isConnected ? { qrCode: null as any, qrExpiresAt: null as any } : {})
+                                })
+                                .where(eq(whatsappConnections.id, conn.id));
+
+                            if (isConnected) {
+                                await db.update(whatsappNumbers)
+                                    .set({ isConnected: true, status: 'active' })
+                                    .where(eq(whatsappNumbers.id, conn.whatsappNumberId!));
+                            }
+                        }
+                    }
                 );
             } catch (err) {
                 console.error(`[WhatsAppSession] Failed to restore session ${conn.whatsappNumberId}:`, err);

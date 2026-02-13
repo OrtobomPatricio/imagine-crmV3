@@ -17,6 +17,8 @@ interface ConnectionState {
     qr?: string;
     socket?: WASocket;
     typingJids?: Set<string>; // Track who is typing
+    reconnectAttempts?: number;  // ✅ Track reconnection attempts
+    lastReconnectAt?: Date;      // ✅ Track last reconnection time
 }
 
 // In-memory store for active connections
@@ -63,13 +65,32 @@ export const BaileysService = {
             }
 
             if (connection === 'close') {
-                const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+                const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-                connections.set(userId, { status: 'disconnected' });
+                const currentConn = connections.get(userId) || { status: 'disconnected' as const };
+                const attempts = (currentConn.reconnectAttempts || 0) + 1;
+                const MAX_RECONNECT_ATTEMPTS = 5;
+
+                connections.set(userId, {
+                    ...currentConn,
+                    status: 'disconnected',
+                    reconnectAttempts: attempts
+                });
                 onStatusUpdate('disconnected');
 
-                if (shouldReconnect) {
-                    this.initializeSession(userId, onQrUpdate, onStatusUpdate);
+                if (shouldReconnect && attempts < MAX_RECONNECT_ATTEMPTS) {
+                    const delay = Math.min(1000 * Math.pow(2, attempts), 30000); // Exponencial max 30s
+                    console.log(`[Baileys] Reconnecting ${userId} in ${delay}ms (attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+                    setTimeout(() => {
+                        this.initializeSession(userId, onQrUpdate, onStatusUpdate);
+                    }, delay);
+                } else if (attempts >= MAX_RECONNECT_ATTEMPTS) {
+                    console.error(`[Baileys] Max reconnection attempts reached for ${userId}, giving up`);
+                    if (fs.existsSync(sessionPath)) {
+                        fs.rmSync(sessionPath, { recursive: true, force: true });
+                    }
                 } else {
                     // Logged out - clear session
                     if (fs.existsSync(sessionPath)) {
@@ -77,7 +98,8 @@ export const BaileysService = {
                     }
                 }
             } else if (connection === 'open') {
-                connections.set(userId, { ...connections.get(userId)!, status: 'connected', qr: undefined });
+                // ✅ Reset reconnection counter on successful connect
+                connections.set(userId, { ...connections.get(userId)!, status: 'connected', qr: undefined, reconnectAttempts: 0 });
                 onStatusUpdate('connected');
             }
         });
@@ -173,7 +195,15 @@ export const BaileysService = {
     async disconnect(userId: number) {
         const conn = connections.get(userId);
         if (conn?.socket) {
-            conn.socket.end(undefined);
+            try {
+                // ✅ Cerrar WebSocket correctamente
+                await conn.socket.logout(); // Cierra y limpia sesión
+            } catch (err) {
+                console.error(`[Baileys] Error during logout for ${userId}:`, err);
+                // Forzar cierre si logout falla
+                conn.socket.ws.close();
+            }
+
             connections.delete(userId);
 
             // Cleanup session files

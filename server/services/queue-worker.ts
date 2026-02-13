@@ -160,30 +160,45 @@ export class MessageQueueWorker {
             throw new Error("No linked WhatsApp number for this conversation");
         }
 
-        // Ensure connection is ready
-        // This is part of the robust lifecycle check
-        const sock = BaileysService.getSocket(conversation.whatsappNumberId);
+        // ✅ Validar estado de conexión ANTES de obtener socket
+        const status = BaileysService.getStatus(conversation.whatsappNumberId);
+        if (status !== 'connected') {
+            throw new Error(`WhatsApp not connected (status: ${status}). Cannot send message.`);
+        }
 
+        const sock = BaileysService.getSocket(conversation.whatsappNumberId);
         if (!sock) {
-            // Attempt to restore session maybe? 
-            // For now, fail so it retries. The BaileysService should handle reconnection.
-            throw new Error("WhatsApp socket not available (Disconnected?)");
+            throw new Error("WhatsApp socket not available after status check");
+        }
+
+        // ✅ Validación adicional de WebSocket subyacente
+        const wsReadyState = (sock.ws as any)?.readyState;
+        if (wsReadyState !== undefined && wsReadyState !== 1) { // 1 = OPEN en WebSocket
+            throw new Error(`WhatsApp WebSocket not ready (readyState: ${wsReadyState})`);
         }
 
         // Baileys Send
         const jid = conversation.contactPhone + "@s.whatsapp.net"; // Format JID
 
         let sentMsg;
-        if (chatMessage.messageType === 'text') {
-            sentMsg = await sock.sendMessage(jid, { text: chatMessage.content || "" });
-        } else if (chatMessage.messageType === 'image' && chatMessage.mediaUrl) {
-            sentMsg = await sock.sendMessage(jid, {
-                image: { url: chatMessage.mediaUrl },
-                caption: chatMessage.content || ""
-            });
-        } else {
-            // Handle other types as needed
-            sentMsg = await sock.sendMessage(jid, { text: `[Unsupported type: ${chatMessage.messageType}] ${chatMessage.content}` });
+        try {
+            if (chatMessage.messageType === 'text') {
+                sentMsg = await sock.sendMessage(jid, { text: chatMessage.content || "" });
+            } else if (chatMessage.messageType === 'image' && chatMessage.mediaUrl) {
+                sentMsg = await sock.sendMessage(jid, {
+                    image: { url: chatMessage.mediaUrl },
+                    caption: chatMessage.content || ""
+                });
+            } else {
+                // Handle other types as needed
+                sentMsg = await sock.sendMessage(jid, { text: `[Unsupported type: ${chatMessage.messageType}] ${chatMessage.content}` });
+            }
+        } catch (sendError: any) {
+            // ✅ Mejor manejo de errores específicos de Baileys
+            if (sendError.message?.includes('not-authorized')) {
+                throw new Error('WhatsApp session expired. Please reconnect.');
+            }
+            throw sendError;
         }
 
         // If we get here, it sent successfully (or at least handed off to TCP)

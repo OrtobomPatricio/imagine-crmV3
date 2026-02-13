@@ -135,9 +135,17 @@ export const MessageHandler = {
 
             if (existingLead.length > 0) {
                 leadId = existingLead[0].id;
-                // Only update lastContactedAt if it's a NEW message (notify), not history sync
-                if (upsertType === 'notify') {
-                    await db.update(leads).set({ lastContactedAt: new Date() }).where(eq(leads.id, leadId));
+
+                // ✅ Actualizar lastContactedAt con timestamp del mensaje
+                // Para 'notify' usa fecha actual, para 'append' usa fecha del mensaje
+                const contactDate = upsertType === 'notify' ? new Date() : messageTimestamp;
+
+                // Solo actualizar si es MÁS RECIENTE que el valor actual
+                const currentLastContact = existingLead[0].lastContactedAt;
+                if (!currentLastContact || contactDate > currentLastContact) {
+                    await db.update(leads)
+                        .set({ lastContactedAt: contactDate })
+                        .where(eq(leads.id, leadId));
                 }
             } else {
                 // If syncing history, maybe we DON'T want to create leads for everyone who ever messaged?
