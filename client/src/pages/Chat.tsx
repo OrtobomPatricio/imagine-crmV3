@@ -100,7 +100,7 @@ export default function ChatPage() {
   }, [search]);
 
   return (
-    <div className="h-[calc(100vh-80px)] flex gap-4 relative">
+    <div className="flex flex-col h-[calc(100vh-6rem)] md:h-[calc(100vh-7rem)] gap-4 relative overflow-hidden">
       {/* Left: Conversation List */}
       <Card className={cn(
         "w-full md:w-80 lg:w-96 flex flex-col h-full overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
