@@ -116,7 +116,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   const messagesQuery = trpc.chat.getMessages.useInfiniteQuery(
     { conversationId, limit: 50 },
     {
-      getPreviousPageParam: (firstPage) => firstPage.nextCursor ?? undefined,
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       refetchInterval: 3000,
       refetchIntervalInBackground: true,
     }

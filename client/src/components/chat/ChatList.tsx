@@ -32,6 +32,23 @@ export function ChatList({ onSelect, selectedId, query }: ChatListProps) {
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportH, setViewportH] = useState(600);
 
+    // Calculate virtualization ranges (must be before conditional returns)
+    const total = conversations?.length || 0;
+    const totalHeight = total * ITEM_HEIGHT;
+
+    const range = useMemo(() => {
+        const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
+        const end = Math.min(total, Math.ceil((scrollTop + viewportH) / ITEM_HEIGHT) + OVERSCAN);
+        return { start, end };
+    }, [scrollTop, viewportH, total]);
+
+    const visible = useMemo(() => {
+        return (conversations || []).slice(range.start, range.end);
+    }, [conversations, range]);
+
+    const topPad = range.start * ITEM_HEIGHT;
+    const bottomPad = Math.max(0, totalHeight - topPad - visible.length * ITEM_HEIGHT);
+
     useEffect(() => {
         const el = scrollerRef.current;
         if (!el) return;
@@ -78,19 +95,6 @@ export function ChatList({ onSelect, selectedId, query }: ChatListProps) {
             </div>
         );
     }
-
-    const total = conversations?.length || 0;
-    const totalHeight = total * ITEM_HEIGHT;
-
-    const range = useMemo(() => {
-        const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
-        const end = Math.min(total, Math.ceil((scrollTop + viewportH) / ITEM_HEIGHT) + OVERSCAN);
-        return { start, end };
-    }, [scrollTop, viewportH, total]);
-
-    const visible = useMemo(() => {
-        return (conversations || []).slice(range.start, range.end);
-    }, [conversations, range]);
 
     const topPad = range.start * ITEM_HEIGHT;
     const bottomPad = Math.max(0, totalHeight - topPad - visible.length * ITEM_HEIGHT);
