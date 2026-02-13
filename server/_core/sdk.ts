@@ -11,6 +11,7 @@ import * as db from "../db";
 import { getDb } from "../db";
 import crypto from "node:crypto";
 import { ENV } from "./env";
+import { logger, safeError } from "./logger";
 import type {
   ExchangeTokenRequest,
   ExchangeTokenResponse,
@@ -34,11 +35,9 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+    logger.info({ url: ENV.oAuthServerUrl }, "[OAuth] Initialized");
     if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
+      logger.error("[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable.");
     }
   }
 
@@ -221,7 +220,7 @@ class SDKServer {
         }
       }
     } catch (e) {
-      console.error("Failed to store session in DB", e);
+      logger.error({ err: safeError(e) }, "Failed to store session in DB");
       // No fallamos el login si falla la DB, pero es riesgoso para revocación
     }
 
@@ -232,7 +231,7 @@ class SDKServer {
     cookieValue: string | undefined | null
   ): Promise<{ openId: string; appId: string; name: string; jti?: string } | null> {
     if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
+      logger.warn("[Auth] Missing session cookie");
       return null;
     }
 
@@ -244,7 +243,7 @@ class SDKServer {
       const { openId, appId, name, jti } = payload as Record<string, unknown>;
 
       if (!isNonEmptyString(openId) || !isNonEmptyString(appId)) {
-        console.warn("[Auth] Session payload missing required fields");
+        logger.warn("[Auth] Session payload missing required fields");
         return null;
       }
 
@@ -255,14 +254,14 @@ class SDKServer {
           if (database) {
             const session = await database.select().from(sessions).where(eq(sessions.sessionToken, jti)).limit(1);
             if (!session[0]) {
-              console.warn("[Auth] Session revoked or invalid (JTI not found)");
+              logger.warn("[Auth] Session revoked or invalid (JTI not found)");
               return null;
             }
             // Update lastActivityAt
             database.update(sessions).set({ lastActivityAt: new Date() }).where(eq(sessions.id, session[0].id)).catch(() => { });
           }
         } catch (e) {
-          console.error("[Auth] DB session check failed", e);
+          logger.error({ err: safeError(e) }, "[Auth] DB session check failed");
           // If DB is down, should we allow? Safe default is NO.
           return null;
         }
@@ -275,7 +274,7 @@ class SDKServer {
         jti: typeof jti === "string" ? jti : undefined,
       };
     } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
+      logger.warn({ err: safeError(error) }, "[Auth] Session verification failed");
       return null;
     }
   }
@@ -311,7 +310,7 @@ class SDKServer {
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {
-      console.warn(`[Auth] Invalid session cookie. Content-Length: ${req.headers.cookie?.length ?? 0}`);
+      logger.warn({ contentLength: req.headers.cookie?.length ?? 0 }, "[Auth] Invalid session cookie");
       throw ForbiddenError("Invalid session cookie");
     }
 
@@ -327,7 +326,7 @@ class SDKServer {
     if (!user) {
       // Logic for local users: Do NOT attempt OAuth sync, they must exist in DB
       if (sessionUserId.startsWith("local_")) {
-        console.warn(`[Auth] Local user ${sessionUserId} not found in DB`);
+        logger.warn({ sessionUserId }, "[Auth] Local user not found in DB");
         throw ForbiddenError("User not found");
       }
 
@@ -342,7 +341,7 @@ class SDKServer {
         });
         user = await db.getUserByOpenId(userInfo.openId);
       } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
+        logger.error({ err: safeError(error) }, "[Auth] Failed to sync user from OAuth");
         throw ForbiddenError("Failed to sync user info");
       }
     }
@@ -381,7 +380,7 @@ class SDKServer {
       }
     } catch (e) {
       // If token invalid/expired, session is effectively dead/irrelevant for DB (or already gone)
-      console.warn("Revoke failed or token invalid", e);
+      logger.warn({ err: safeError(e) }, "Revoke failed or token invalid");
     }
   }
 }
