@@ -73,9 +73,11 @@ export function registerNativeOAuth(app: Express) {
                     clientID: googleClientId,
                     clientSecret: googleClientSecret,
                     callbackURL: `${baseUrl}/api/auth/google/callback`,
+                    proxy: true,
                 },
                 async (accessToken: any, refreshToken: any, profile: any, done: any) => {
                     try {
+                        console.log('[GoogleOAuth] Profile received:', profile.id);
                         const user: Express.User = {
                             openId: profile.id,
                             name: profile.displayName,
