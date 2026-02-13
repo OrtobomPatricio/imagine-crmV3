@@ -155,7 +155,7 @@ export default function ChatPage() {
 
       {/* Center: Chat Area */}
       <Card className={cn(
-        "flex-1 flex flex-col h-full overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
+        "flex-1 flex flex-col h-full overflow-hidden border-border/50 shadow-sm bg-card/80 backdrop-blur-sm transition-all duration-300",
         !selectedConversationId ? "hidden md:flex" : "flex"
       )}>
         {selectedConversationId ? (

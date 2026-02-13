@@ -97,7 +97,7 @@ export function ChatList({ onSelect, selectedId, query }: ChatListProps) {
     }
 
     return (
-        <div ref={scrollerRef} className="h-full overflow-y-auto">
+        <div ref={scrollerRef} className="h-full overflow-y-auto custom-scrollbar">
             <div style={{ height: topPad }} />
             <div className="flex flex-col gap-1 p-2">
                 {visible.map((conv) => {

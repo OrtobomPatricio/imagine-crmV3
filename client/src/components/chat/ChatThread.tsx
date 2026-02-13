@@ -686,7 +686,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
 
       {/* Messages */}
       <div className="relative flex-1">
-        <div ref={messagesContainerRef} className="absolute inset-0 overflow-y-auto p-4 space-y-4">
+        <div ref={messagesContainerRef} className="absolute inset-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
           {messagesQuery.isLoading ? (
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
