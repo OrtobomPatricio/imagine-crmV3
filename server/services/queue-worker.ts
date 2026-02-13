@@ -178,7 +178,11 @@ export class MessageQueueWorker {
         }
 
         // Baileys Send
-        const jid = conversation.contactPhone + "@s.whatsapp.net"; // Format JID
+        // Fix: Remove '+' from phone number for JID
+        const cleanPhone = conversation.contactPhone.replace(/\+/g, '');
+        const jid = cleanPhone + "@s.whatsapp.net";
+
+        logger.info(`[QueueWorker] Sending to JID: ${jid}`);
 
         let sentMsg;
         try {
