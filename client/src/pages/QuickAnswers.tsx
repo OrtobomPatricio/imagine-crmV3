@@ -29,23 +29,70 @@ export default function QuickAnswers() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [shortcut, setShortcut] = useState("");
   const [message, setMessage] = useState("");
+  const [attachments, setAttachments] = useState<{ url: string; name: string; type: string }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   function startNew() {
     setEditingId(null);
     setShortcut("");
     setMessage("");
+    setAttachments([]);
   }
 
   function startEdit(item: any) {
     setEditingId(item.id);
     setShortcut(item.shortcut ?? "");
     setMessage(item.message ?? "");
+    setAttachments(item.attachments ?? []);
   }
 
   async function save() {
-    await upsert.mutateAsync({ id: editingId ?? undefined, shortcut, message });
+    await upsert.mutateAsync({ id: editingId ?? undefined, shortcut, message, attachments });
     startNew();
   }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("files", file);
+
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error("Error subiendo archivo");
+
+        const data = await res.json();
+        const uploaded = data.files[0];
+
+        setAttachments((prev) => [
+          ...prev,
+          {
+            url: uploaded.url,
+            name: uploaded.originalname || file.name,
+            type: uploaded.mimetype || file.type,
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error al subir archivos");
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      e.target.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -97,6 +144,38 @@ export default function QuickAnswers() {
           <div>
             <div className="text-xs text-muted-foreground mb-1">Mensaje</div>
             <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={8} placeholder="Escribe la respuesta..." />
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Adjuntos</div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {attachments.map((att, i) => (
+                <div key={i} className="flex items-center gap-2 bg-muted px-2 py-1 rounded text-xs border">
+                  <span className="truncate max-w-[150px]">{att.name}</span>
+                  <button onClick={() => removeAttachment(i)} className="text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative"
+                disabled={isUploading}
+              >
+                {isUploading ? "Subiendo..." : "Adjuntar archivos"}
+                <input
+                  type="file"
+                  multiple
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  onChange={handleFileSelect}
+                  disabled={isUploading}
+                />
+              </Button>
+            </div>
           </div>
 
           <div className="flex gap-2">

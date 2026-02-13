@@ -484,6 +484,7 @@ export const quickAnswers = mysqlTable("quick_answers", {
   id: int("id").autoincrement().primaryKey(),
   shortcut: text("shortcut").notNull(),
   message: text("message").notNull(),
+  attachments: json("attachments").$type<{ url: string; name: string; type: string }[]>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

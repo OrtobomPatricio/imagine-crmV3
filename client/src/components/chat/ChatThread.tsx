@@ -3,12 +3,14 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { FileText, Paperclip, Send, MapPin, X, ArrowDown, RefreshCw, Loader2, Check, CheckCheck, Clock } from "lucide-react";
+import { FileText, Paperclip, Send, MapPin, X, ArrowDown, RefreshCw, Loader2, Check, CheckCheck, Clock, Smile } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ChatQuickReplies } from "@/components/chat/ChatQuickReplies";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import {
   Select,
   SelectContent,
@@ -90,6 +92,12 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
 
   // Typing indicator (simulated client-side for now)
   const [isContactTyping, setIsContactTyping] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setMessage((prev) => prev + emojiData.emoji);
+    // Don't close picker for multiple emoji insertion
+  };
 
   useEffect(() => {
     sendQueueRef.current = sendQueue;
@@ -116,7 +124,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   const messagesQuery = trpc.chat.getMessages.useInfiniteQuery(
     { conversationId, limit: 50 },
     {
-      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      getNextPageParam: (lastPage: any) => lastPage.nextCursor ?? undefined,
       refetchInterval: 3000,
       refetchIntervalInBackground: true,
     }
@@ -164,7 +172,9 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   });
 
   const sortedMessages = useMemo(() => {
-    const list = messagesQuery.data?.pages.flatMap((p) => p.items) ?? [];
+    // Fix: Access items correctly based on return type structure
+    const pages = messagesQuery.data?.pages || [];
+    const list = pages.flatMap((p: any) => p.items || []) ?? [];
     return [...list].sort((a: any, b: any) => {
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
@@ -289,7 +299,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
 
         try {
           // Use mutateAsync to serialize sends
-          // @ts-expect-error - mutateAsync exists in react-query mutation
+          // @ts-ignore - mutateAsync exists in react-query mutation
           await sendMessage.mutateAsync(next.payload);
           updateQueueItem(next.id, { status: "sent" });
 
@@ -611,7 +621,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
               <div className="text-xs text-muted-foreground">Estado</div>
               <Select
                 value={(conversation as any).ticketStatus || "pending"}
-                onValueChange={(v) => setTicketStatus.mutate({ conversationId, status: v as any })}
+                onValueChange={(v) => setTicketStatus.mutate({ conversationId, ticketStatus: v as any })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Estado" />
@@ -653,7 +663,8 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
                 value={(conversation as any).assignedToId ? String((conversation as any).assignedToId) : "none"}
                 onValueChange={(v) => {
                   const userId = v === "none" ? null : Number(v);
-                  assignConversation.mutate({ conversationId, userId });
+                  // Fix: Correct input property name 'assignedToId'
+                  assignConversation.mutate({ conversationId, assignedToId: userId });
                 }}
               >
                 <SelectTrigger>
@@ -984,6 +995,21 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
               }
             }}
           />
+
+          <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-muted-foreground hover:text-yellow-500 hover:bg-yellow-500/10 rounded-full transition-colors"
+              >
+                <Smile className="h-5 w-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="start" className="w-auto p-0 border-none shadow-none bg-transparent">
+              <EmojiPicker onEmojiClick={onEmojiClick} lazyLoadEmojis={true} />
+            </PopoverContent>
+          </Popover>
 
           <div className="flex-1">
             <Textarea

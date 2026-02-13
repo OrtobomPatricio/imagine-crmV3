@@ -103,7 +103,7 @@ export default function ChatPage() {
     <div className="h-[calc(100vh-80px)] flex gap-4 relative">
       {/* Left: Conversation List */}
       <Card className={cn(
-        "w-full md:w-80 lg:w-96 flex flex-col overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
+        "w-full md:w-80 lg:w-96 flex flex-col h-full overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
         selectedConversationId ? "hidden md:flex" : "flex"
       )}>
         <div className="p-3 border-b border-border/50 bg-muted/30 space-y-3">
@@ -155,7 +155,7 @@ export default function ChatPage() {
 
       {/* Center: Chat Area */}
       <Card className={cn(
-        "flex-1 flex flex-col overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
+        "flex-1 flex flex-col h-full overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
         !selectedConversationId ? "hidden md:flex" : "flex"
       )}>
         {selectedConversationId ? (

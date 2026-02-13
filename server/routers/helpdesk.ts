@@ -206,15 +206,28 @@ export const helpdeskRouter = router({
       id: z.number().optional(),
       shortcut: z.string().min(1).max(5000),
       message: z.string().min(1).max(10000),
+      attachments: z.array(z.object({
+        url: z.string(),
+        name: z.string(),
+        type: z.string(),
+      })).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       if (input.id) {
-        await db.update(quickAnswers).set({ shortcut: input.shortcut, message: input.message }).where(eq(quickAnswers.id, input.id));
+        await db.update(quickAnswers).set({
+          shortcut: input.shortcut,
+          message: input.message,
+          attachments: input.attachments ?? [],
+        }).where(eq(quickAnswers.id, input.id));
         return { id: input.id };
       }
-      const res = await db.insert(quickAnswers).values({ shortcut: input.shortcut, message: input.message });
+      const res = await db.insert(quickAnswers).values({
+        shortcut: input.shortcut,
+        message: input.message,
+        attachments: input.attachments ?? [],
+      });
       return { id: res[0].insertId };
     }),
 

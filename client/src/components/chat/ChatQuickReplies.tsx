@@ -69,7 +69,7 @@ export function ChatQuickReplies({ onSelect }: ChatQuickRepliesProps) {
                           key={qa.id}
                           className="flex flex-col gap-1 p-2 hover:bg-muted/50 rounded-md cursor-pointer transition-colors"
                           onClick={() => {
-                            onSelect(qa.message);
+                            onSelect(qa.message, (qa.attachments || []) as Attachment[]);
                             setIsOpen(false);
                           }}
                         >
@@ -77,6 +77,24 @@ export function ChatQuickReplies({ onSelect }: ChatQuickRepliesProps) {
                             <span className="font-medium text-sm text-foreground/90">{qa.shortcut}</span>
                           </div>
                           <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">{qa.message}</p>
+
+                          {Array.isArray(qa.attachments) && qa.attachments.length > 0 && (
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                              {qa.attachments.map((a: any, i: number) => (
+                                <div
+                                  key={i}
+                                  className="text-[10px] bg-muted px-1.5 py-0.5 rounded border flex items-center gap-1"
+                                >
+                                  {String(a.type || "").startsWith("image") ? (
+                                    <ImageIcon className="h-3 w-3" />
+                                  ) : (
+                                    <FileText className="h-3 w-3" />
+                                  )}
+                                  <span className="truncate max-w-[110px]">{a.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
