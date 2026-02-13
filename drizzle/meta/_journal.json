@@ -120,6 +120,13 @@
       "when": 1770400000000,
       "tag": "0034_create_message_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1739442000000,
+      "tag": "0035_add_leads_whatsapp_connection_type",
+      "breakpoints": true
     }
   ]
 }
