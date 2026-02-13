@@ -44,19 +44,39 @@ export default function Helpdesk() {
           "w-full md:w-80 lg:w-96 flex flex-col overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
           selectedConversationId ? "hidden md:flex" : "flex"
         )}>
-          <div className="p-3 border-b border-border/50 bg-muted/30 space-y-3">
+          <div className="p-2 border-b border-border/50 bg-muted/30 space-y-2">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold tracking-tight">Helpdesk</h2>
-              <Button size="sm" variant="outline" onClick={() => setSelectedConversationId(null)}>Lista</Button>
+              <h2 className="font-semibold tracking-tight text-sm">Helpdesk</h2>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setSelectedConversationId(null)} title="Ver lista">
+                <span className="sr-only">Lista</span>
+                <Layers className="h-4 w-4" />
+              </Button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-2">
+              <Select value={ticketStatus} onValueChange={(v) => setTicketStatus(v as any)}>
+                <SelectTrigger className="h-8 w-fit min-w-[130px] text-xs px-2 bg-background/50">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="text-muted-foreground shrink-0">Estado:</span>
+                    <SelectValue placeholder="Estado" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="open">Abierto</SelectItem>
+                  <SelectItem value="closed">Cerrado</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select
                 value={queueId ? String(queueId) : "all"}
                 onValueChange={(v) => setQueueId(v === "all" ? null : Number(v))}
               >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Cola" />
+                <SelectTrigger className="h-8 w-fit min-w-[130px] text-xs px-2 bg-background/50">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="text-muted-foreground shrink-0">Cola:</span>
+                    <SelectValue placeholder="Cola" />
+                  </div>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
@@ -66,26 +86,15 @@ export default function Helpdesk() {
                 </SelectContent>
               </Select>
 
-              <Select value={ticketStatus} onValueChange={(v) => setTicketStatus(v as any)}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="open">Abierto</SelectItem>
-                  <SelectItem value="closed">Cerrado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar nombre o teléfono..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 bg-background/50 h-8 text-xs focus-visible:ring-offset-0"
-              />
+              <div className="relative flex-1 min-w-[100px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8 bg-background/50 h-8 text-xs focus-visible:ring-offset-0 w-full"
+                />
+              </div>
             </div>
           </div>
 
