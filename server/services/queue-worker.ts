@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { messageQueue, chatMessages, whatsappConnections, whatsappNumbers, conversations } from "../../drizzle/schema";
 import { BaileysService } from "./baileys";
 import { logger, safeError } from "../_core/logger";
+import { dispatchIntegrationEvent } from "../_core/integrationDispatch";
 import path from "path";
 
 // Constants
@@ -130,6 +131,27 @@ export class MessageQueueWorker {
             await db.update(chatMessages)
                 .set({ status: 'sent', sentAt: new Date() })
                 .where(eq(chatMessages.id, chatMessage.id));
+
+            // Webhook dispatch
+            try {
+                if (conversation.whatsappNumberId) {
+                    await dispatchIntegrationEvent({
+                        whatsappNumberId: conversation.whatsappNumberId,
+                        event: "message_sent",
+                        data: {
+                            id: chatMessage.id,
+                            direction: "outbound",
+                            content: chatMessage.content,
+                            messageType: chatMessage.messageType,
+                            mediaUrl: chatMessage.mediaUrl,
+                            createdAt: new Date(),
+                            to: conversation.contactPhone
+                        }
+                    });
+                }
+            } catch (e) {
+                logger.error({ err: safeError(e) }, "Failed to dispatch outgoing integration event");
+            }
 
         } catch (error: any) {
             const errorMessage = error.message || "Unknown error";

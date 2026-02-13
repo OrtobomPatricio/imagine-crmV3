@@ -10,7 +10,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { ChatQuickReplies } from "@/components/chat/ChatQuickReplies";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import EmojiPicker, { EmojiClickData, EmojiStyle } from "emoji-picker-react";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import {
   Select,
   SelectContent,
@@ -1009,7 +1009,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
             <PopoverContent side="top" align="start" className="w-auto p-0 border-none shadow-none bg-transparent">
               <EmojiPicker
                 onEmojiClick={onEmojiClick}
-                emojiStyle={EmojiStyle.NATIVE}
+                emojiStyle={"native" as any}
                 lazyLoadEmojis={true}
                 width="100%"
                 height={350}
