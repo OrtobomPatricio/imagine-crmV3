@@ -86,7 +86,7 @@ services:
       MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
       MICROSOFT_TENANT_ID: ${MICROSOFT_TENANT_ID:-common}
     volumes:
-      - uploads_data:/app/dist/public/uploads
+      - uploads_data:/app/storage/uploads
       - baileys_sessions:/app/server/sessions
     logging:
       driver: "json-file"

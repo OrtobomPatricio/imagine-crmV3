@@ -191,25 +191,22 @@ export class MessageQueueWorker {
                 sentMsg = await sock.sendMessage(jid, { text: chatMessage.content || "" });
             } else if (chatMessage.messageType === 'image' && chatMessage.mediaUrl) {
                 // Fix: Resolve local file path from URL
-                // URL: /api/uploads/filename.png -> File: /app/dist/public/uploads/filename.png
-                // Locally: public/uploads/filename.png
+                // URL: /api/uploads/filename.png -> File: /app/storage/uploads/filename.png
+
                 let filePath = chatMessage.mediaUrl;
 
                 // If path starts with /api/uploads, map it to the physical directory
                 if (filePath.startsWith('/api/uploads/')) {
                     const filename = filePath.split('/').pop();
-                    // Determine uploads dir based on environment
-                    const uploadDir = process.env.NODE_ENV === 'production'
-                        ? '/app/dist/public/uploads'
-                        : path.resolve(process.cwd(), 'public', 'uploads');
-
-                    filePath = path.join(uploadDir, filename);
+                    // Maps to storage/uploads as per upload.controller.ts
+                    const uploadDir = path.join(process.cwd(), "storage/uploads");
+                    filePath = path.join(uploadDir, filename!);
                 }
 
                 logger.info(`[QueueWorker] Sending image from: ${filePath}`);
 
                 sentMsg = await sock.sendMessage(jid, {
-                    image: { url: filePath }, // Baileys supports file path in url field for local files
+                    image: { url: filePath },
                     caption: chatMessage.content || ""
                 });
             } else {
