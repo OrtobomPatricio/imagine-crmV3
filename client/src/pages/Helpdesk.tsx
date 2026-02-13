@@ -44,57 +44,47 @@ export default function Helpdesk() {
           "w-full md:w-80 lg:w-96 flex flex-col overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
           selectedConversationId ? "hidden md:flex" : "flex"
         )}>
-          <div className="p-2 border-b border-border/50 bg-muted/30 space-y-2">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold tracking-tight text-sm">Helpdesk</h2>
-              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setSelectedConversationId(null)} title="Ver lista">
-                <span className="sr-only">Lista</span>
-                <Layers className="h-4 w-4" />
-              </Button>
-            </div>
+          <div className="p-2 border-b border-border/50 bg-muted/30 flex items-center gap-2">
+            <h2 className="font-semibold tracking-tight text-sm shrink-0 hidden xl:block">Helpdesk</h2>
+            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => setSelectedConversationId(null)} title="Ver lista">
+              <span className="sr-only">Lista</span>
+              <Layers className="h-4 w-4" />
+            </Button>
 
-            <div className="flex items-center gap-2">
-              <Select value={ticketStatus} onValueChange={(v) => setTicketStatus(v as any)}>
-                <SelectTrigger className="h-8 w-fit min-w-[130px] text-xs px-2 bg-background/50">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="text-muted-foreground shrink-0">Estado:</span>
-                    <SelectValue placeholder="Estado" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="open">Abierto</SelectItem>
-                  <SelectItem value="closed">Cerrado</SelectItem>
-                </SelectContent>
-              </Select>
+            <Select value={ticketStatus} onValueChange={(v) => setTicketStatus(v as any)}>
+              <SelectTrigger className="h-7 w-[100px] text-xs px-2 bg-background/50">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendiente</SelectItem>
+                <SelectItem value="open">Abierto</SelectItem>
+                <SelectItem value="closed">Cerrado</SelectItem>
+              </SelectContent>
+            </Select>
 
-              <Select
-                value={queueId ? String(queueId) : "all"}
-                onValueChange={(v) => setQueueId(v === "all" ? null : Number(v))}
-              >
-                <SelectTrigger className="h-8 w-fit min-w-[130px] text-xs px-2 bg-background/50">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="text-muted-foreground shrink-0">Cola:</span>
-                    <SelectValue placeholder="Cola" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {queueOptions.map((q) => (
-                    <SelectItem key={q.id} value={String(q.id)}>{q.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select
+              value={queueId ? String(queueId) : "all"}
+              onValueChange={(v) => setQueueId(v === "all" ? null : Number(v))}
+            >
+              <SelectTrigger className="h-7 w-[100px] text-xs px-2 bg-background/50">
+                <SelectValue placeholder="Cola" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {queueOptions.map((q) => (
+                  <SelectItem key={q.id} value={String(q.id)}>{q.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              <div className="relative flex-1 min-w-[100px]">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 bg-background/50 h-8 text-xs focus-visible:ring-offset-0 w-full"
-                />
-              </div>
+            <div className="relative flex-1 min-w-[80px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                placeholder="Buscar..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-7 bg-background/50 h-7 text-xs focus-visible:ring-offset-0 w-full"
+              />
             </div>
           </div>
 
@@ -125,11 +115,11 @@ export default function Helpdesk() {
         <div className={cn(
           "w-full lg:w-80 flex-col overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300 hidden lg:flex"
         )}>
-          {selectedConversation ? (
-            <ChatLeadDetails conversation={selectedConversation} />
+          {selectedConversation?.leadId ? (
+            <ChatLeadDetails leadId={selectedConversation.leadId} />
           ) : (
             <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-6 text-center">
-              Selecciona un ticket para ver detalles
+              {selectedConversation ? "El ticket no tiene un lead asignado" : "Selecciona un ticket para ver detalles"}
             </div>
           )}
         </div>

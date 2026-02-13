@@ -614,73 +614,62 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   return (
     <div className="flex flex-col h-full">
       {showHelpdeskControls && isPrivileged && conversation && (
-        <div className="border-b p-3 flex flex-col gap-2">
-          <div className="text-xs text-muted-foreground">Ticket</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Estado</div>
-              <Select
-                value={(conversation as any).ticketStatus || "pending"}
-                onValueChange={(v) => setTicketStatus.mutate({ conversationId, ticketStatus: v as any })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="open">Abierto</SelectItem>
-                  <SelectItem value="closed">Cerrado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="border-b p-2 flex items-center gap-2 overflow-x-auto bg-muted/10">
+          <span className="text-xs font-medium text-muted-foreground shrink-0">Ticket:</span>
 
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Cola</div>
-              <Select
-                value={(conversation as any).queueId ? String((conversation as any).queueId) : "none"}
-                onValueChange={(v) => {
-                  const queueId = v === "none" ? null : Number(v);
-                  setConversationQueue.mutate({ conversationId, queueId });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Cola" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin cola</SelectItem>
-                  {(queues ?? []).map((q: any) => (
-                    <SelectItem key={q.id} value={String(q.id)}>
-                      {q.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <Select
+            value={(conversation as any).ticketStatus || "pending"}
+            onValueChange={(v) => setTicketStatus.mutate({ conversationId, ticketStatus: v as any })}
+          >
+            <SelectTrigger className="h-7 w-[110px] text-xs px-2 bg-background/50">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pendiente</SelectItem>
+              <SelectItem value="open">Abierto</SelectItem>
+              <SelectItem value="closed">Cerrado</SelectItem>
+            </SelectContent>
+          </Select>
 
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Agente</div>
-              <Select
-                value={(conversation as any).assignedToId ? String((conversation as any).assignedToId) : "none"}
-                onValueChange={(v) => {
-                  const userId = v === "none" ? null : Number(v);
-                  // Fix: Correct input property name 'assignedToId'
-                  assignConversation.mutate({ conversationId, assignedToId: userId });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Asignar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin asignar</SelectItem>
-                  {(users ?? []).filter((u: any) => u.isActive).map((u: any) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <Select
+            value={(conversation as any).queueId ? String((conversation as any).queueId) : "none"}
+            onValueChange={(v) => {
+              const queueId = v === "none" ? null : Number(v);
+              setConversationQueue.mutate({ conversationId, queueId });
+            }}
+          >
+            <SelectTrigger className="h-7 w-[110px] text-xs px-2 bg-background/50">
+              <SelectValue placeholder="Cola" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin cola</SelectItem>
+              {(queues ?? []).map((q: any) => (
+                <SelectItem key={q.id} value={String(q.id)}>
+                  {q.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={(conversation as any).assignedToId ? String((conversation as any).assignedToId) : "none"}
+            onValueChange={(v) => {
+              const userId = v === "none" ? null : Number(v);
+              assignConversation.mutate({ conversationId, assignedToId: userId });
+            }}
+          >
+            <SelectTrigger className="h-7 w-[110px] text-xs px-2 bg-background/50">
+              <SelectValue placeholder="Asignar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin asignar</SelectItem>
+              {(users ?? []).filter((u: any) => u.isActive).map((u: any) => (
+                <SelectItem key={u.id} value={String(u.id)}>
+                  {u.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 
