@@ -55,6 +55,9 @@ export default function ChatPage() {
   const [location, setLocation] = useLocation();
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
 
+  // UI States
+  const [showDetails, setShowDetails] = useState(true);
+
   // List controls
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -62,6 +65,18 @@ export default function ChatPage() {
   const [sort, setSort] = useState<"recent" | "oldest" | "unread">("recent");
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [assignedToMe, setAssignedToMe] = useState(false);
+
+  // Keyboard shortcut to toggle details
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "]" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShowDetails(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const getOrCreateMutation = trpc.chat.getOrCreateByLeadId.useMutation({
     onSuccess: (data) => {
@@ -94,14 +109,12 @@ export default function ChatPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
-    return () => window.clearTimeout(t);
-  }, [search]);
-
+  // Adjust height calculation to use dvh for better mobile support
+  // 100dvh - header(3.5rem) - padding(1rem mobile/1.5rem desktop)
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] md:h-[calc(100vh-7rem)] gap-4 relative overflow-hidden bg-background">
+    <div className="flex flex-row h-[calc(100dvh-6rem)] md:h-[calc(100dvh-7rem)] gap-4 relative overflow-hidden bg-background">
       {/* Left: Conversation List */}
+      {/* Hidden if conversation selected on small screens */}
       <Card className={cn(
         "w-full md:w-80 lg:w-96 flex flex-col h-full overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300",
         selectedConversationId ? "hidden md:flex" : "flex"
@@ -161,34 +174,50 @@ export default function ChatPage() {
         {selectedConversationId ? (
           <>
             <div className="h-14 border-b border-border/50 bg-muted/30 flex items-center px-4 justify-between shrink-0">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 overflow-hidden">
                 {/* Mobile Back Button */}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden -ml-2 h-8 w-8"
+                  className="md:hidden -ml-2 h-8 w-8 shrink-0"
                   onClick={() => setSelectedConversationId(null)}
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
 
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="relative flex h-2 w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                   </span>
-                  <span className="font-medium text-sm">Conversación Activa</span>
+                  <span className="font-medium text-sm truncate">
+                    {selectedConversation?.contactName || selectedConversation?.contactPhone || 'Conversación'}
+                  </span>
                 </div>
+              </div>
 
+              <div className="flex items-center gap-1 shrink-0">
                 {selectedConversation && (
                   <ChatActionsMenu
                     conversationId={selectedConversation.id}
                     currentAssignedId={selectedConversation.assignedToId}
                   />
                 )}
+
+                {/* Toggle Lead Details Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-8 w-8 hidden lg:flex", showDetails ? "bg-muted/50" : "")}
+                  onClick={() => setShowDetails(!showDetails)}
+                  title="Ver detalles del lead (Ctrl + ])"
+                >
+                  <Layers className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden relative">
+
+            <div className="flex-1 overflow-hidden relative flex flex-col">
               <ChatThread conversationId={selectedConversationId} />
             </div>
           </>
@@ -197,7 +226,7 @@ export default function ChatPage() {
             <div className="w-20 h-20 rounded-3xl bg-primary/5 flex items-center justify-center mb-6">
               <MessageSquare className="w-10 h-10 text-primary/40" />
             </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">Tu Bandeja de Entrada</h3>
+            <h3 className="text-xl font-semibold text-foreground mb-2 text-center">Tu Bandeja de Entrada</h3>
             <p className="text-sm max-w-md text-center text-muted-foreground/80">
               Selecciona una conversación de la izquierda para ver el historial, responder a tus leads y gestionar tus ventas.
             </p>
@@ -206,15 +235,20 @@ export default function ChatPage() {
       </Card>
 
       {/* Right: Lead Details (Collapsible) */}
-      {selectedConversationId && (
-        <div className="hidden xl:block animate-in fade-in slide-in-from-right-4 duration-500 h-[calc(100vh-4rem)]">
+      {selectedConversationId && showDetails && (
+        <div className={cn(
+          "hidden lg:block w-80 shrink-0 animate-in fade-in slide-in-from-right-4 duration-300",
+          "h-full" // Ensure it takes full height of parent
+        )}>
           {selectedConversation && selectedConversation.leadId ? (
-            <ChatLeadDetails leadId={selectedConversation.leadId} />
+            <Card className="h-full overflow-hidden border-border/50 bg-card">
+              <ChatLeadDetails leadId={selectedConversation.leadId} />
+            </Card>
           ) : (
-            <div className="w-80 h-full border-l p-4 flex flex-col items-center justify-center text-muted-foreground bg-background">
+            <Card className="h-full border-border/50 flex flex-col items-center justify-center text-muted-foreground bg-card/50">
               <Users className="h-8 w-8 mb-2 opacity-20" />
-              <p>Este chat no tiene un lead asociado.</p>
-            </div>
+              <p className="text-sm">Sin lead asociado</p>
+            </Card>
           )}
         </div>
       )}
