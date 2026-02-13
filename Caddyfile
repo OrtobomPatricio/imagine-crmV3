@@ -1,3 +1,7 @@
+{
+    auto_https off
+}
+
 http://168.231.98.244.nip.io {
     reverse_proxy app:3000
 }
