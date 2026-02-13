@@ -60,14 +60,15 @@ function Router() {
         <Route path="/analytics" component={Analytics} />
         <Route path="/monitoring" component={Monitoring} />
         <Route path="/campaigns" component={MarketingModule} />
-        {/* <Route path="/campaigns/new" component={CampaignBuilder} /> Consolidated into MarketingModule */}
-        {/* <Route path="/templates" component={Templates} /> Consolidated into MarketingModule */}
+        <Route path="/campaigns/new" component={CampaignBuilder} />
+        <Route path="/templates" component={MarketingModule} />
         {/* <Route path="/reports" component={Reports} /> Consolidated into Analytics */}
         <Route path="/integrations" component={Integrations} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/pipelines" component={PipelineSettings} />
-        {/* <Route path="/automations" component={Automations} /> Consolidated into MarketingModule */}
-        {/* <Route path="/automations/new" component={AutomationBuilder} /> Consolidated into MarketingModule */}
+        <Route path="/automations" component={MarketingModule} />
+        <Route path="/automations/new" component={AutomationBuilder} />
+        <Route path="/automations/:id" component={AutomationBuilder} />
         <Route path="/scheduling" component={Scheduling} />
         <Route path="/chat" component={Chat} />
         <Route path="/helpdesk" component={Helpdesk} />

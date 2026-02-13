@@ -1,13 +1,29 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLocation } from "wouter";
 import { Send, Workflow, FileText } from "lucide-react";
 import Campaigns from "./Campaigns";
 import Automations from "./Automations";
 import Templates from "./Templates";
 
 export default function MarketingModule() {
+    const [location, setLocation] = useLocation();
+
+    // Determine default tab based on path
+    const getDefaultTab = () => {
+        if (location.startsWith("/automations")) return "automations";
+        if (location.startsWith("/templates")) return "templates";
+        return "campaigns";
+    };
+
+    const handleTabChange = (value: string) => {
+        if (value === "campaigns") setLocation("/campaigns");
+        if (value === "automations") setLocation("/automations");
+        if (value === "templates") setLocation("/templates");
+    };
+
     return (
         <div className="space-y-4">
-            <Tabs defaultValue="campaigns" className="w-full">
+            <Tabs value={getDefaultTab()} onValueChange={handleTabChange} className="w-full">
                 <div className="flex items-center justify-between mb-4">
                     <TabsList>
                         <TabsTrigger value="campaigns" className="flex items-center gap-2">
