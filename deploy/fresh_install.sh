@@ -34,7 +34,7 @@ cd imagine-crm
 echo "📌 Commit actual: $(git log -1 --oneline)"
 
 # 4. Configurar .env
-current_ip=$(curl -s ifconfig.me || echo "168.231.98.244")
+current_ip=$(curl -4 -s ifconfig.me || echo "168.231.98.244")
 
 # URLs
 if [ -n "$1" ]; then
