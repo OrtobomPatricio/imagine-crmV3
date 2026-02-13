@@ -96,9 +96,6 @@ export function ChatList({ onSelect, selectedId, query }: ChatListProps) {
         );
     }
 
-    const topPad = range.start * ITEM_HEIGHT;
-    const bottomPad = Math.max(0, totalHeight - topPad - visible.length * ITEM_HEIGHT);
-
     return (
         <div ref={scrollerRef} className="h-full overflow-y-auto">
             <div style={{ height: topPad }} />
