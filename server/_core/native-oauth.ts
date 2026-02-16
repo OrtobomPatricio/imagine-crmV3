@@ -42,10 +42,25 @@ export function registerNativeOAuth(app: Express) {
     const isProd = process.env.NODE_ENV === 'production';
     const baseUrl = process.env.VITE_OAUTH_PORTAL_URL || 'http://localhost:3000';
 
+    // Redis Store Setup
+    const RedisStore = require("connect-redis").default;
+    const { createClient } = require("redis");
+
+    // Initialize client
+    let redisClient = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' })
+    redisClient.connect().catch(console.error)
+
+    // Initialize store
+    let redisStore = new RedisStore({
+        client: redisClient,
+        prefix: "sess:",
+    })
+
     // Cookie parser and sessions
     app.use(cookieParser());
     app.use(
         session({
+            store: redisStore,
             secret: process.env.JWT_SECRET || 'fallback-secret-change-me',
             resave: false,
             saveUninitialized: false,

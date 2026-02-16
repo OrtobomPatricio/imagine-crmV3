@@ -1,4 +1,4 @@
-import { eq, and, lt, sql } from "drizzle-orm";
+import { eq, and, lt, sql, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { messageQueue, chatMessages, whatsappConnections, whatsappNumbers, conversations } from "../../drizzle/schema";
 import { BaileysService } from "./baileys";
@@ -44,6 +44,9 @@ export class MessageQueueWorker {
     /**
      * Main processing loop
      */
+    /**
+     * Main processing loop
+     */
     private async processQueue() {
         if (this.isProcessing) return;
         this.isProcessing = true;
@@ -55,31 +58,40 @@ export class MessageQueueWorker {
                 return;
             }
 
-            // 1. Fetch pending items (queued or failed < max_retries)
-            // We process higher priority first, then older items
-            const itemsToProcess = await db.select()
-                .from(messageQueue)
-                .where(
-                    and(
-                        sql`${messageQueue.status} IN ('queued', 'failed')`,
-                        lt(messageQueue.attempts, MAX_RETRIES),
-                        sql`(${messageQueue.nextAttemptAt} <= NOW() OR ${messageQueue.nextAttemptAt} IS NULL)`
-                    )
-                )
-                .orderBy(sql`${messageQueue.priority} DESC`, sql`${messageQueue.createdAt} ASC`)
-                .limit(BATCH_SIZE);
+            await db.transaction(async (tx) => {
+                // 1. Fetch pending items atomically using FOR UPDATE SKIP LOCKED
+                // This prevents multiple workers from picking up the same message
+                const pendingItems = await tx.execute(sql`
+                    SELECT * FROM message_queue 
+                    WHERE status IN ('queued', 'failed')
+                    AND attempts < ${MAX_RETRIES}
+                    AND (nextAttemptAt <= NOW() OR nextAttemptAt IS NULL)
+                    ORDER BY priority DESC, createdAt ASC
+                    LIMIT ${BATCH_SIZE}
+                    FOR UPDATE SKIP LOCKED
+                `);
 
-            if (itemsToProcess.length === 0) {
-                this.isProcessing = false;
-                return;
-            }
+                // Type assertion since execute returns generic result
+                // @ts-ignore
+                const items = pendingItems[0] as typeof messageQueue.$inferSelect[];
 
-            logger.debug(`🏭 Processing ${itemsToProcess.length} queued messages`);
+                if (!items || items.length === 0) return;
 
-            // 2. Process each item
-            for (const item of itemsToProcess) {
-                await this.processItem(item);
-            }
+                logger.debug(`🏭 Processing ${items.length} queued messages (Atomic Lock)`);
+
+                const ids = items.map(i => i.id);
+
+                // 2. Mark as processing immediately within transaction
+                await tx.update(messageQueue)
+                    .set({ status: 'processing', attempts: sql`attempts + 1` })
+                    .where(inArray(messageQueue.id, ids));
+
+                // 3. Process items in parallel
+                // Note: We process outside the lock ideally, but here we are inside transaction.
+                // Since they are marked 'processing', other workers won't pick them up.
+                // For safety/simplicity in this architecture, we await them here.
+                await Promise.all(items.map(item => this.processItem(item)));
+            });
 
         } catch (error) {
             logger.error({ err: safeError(error) }, "Error in MessageQueueWorker loop");
@@ -95,10 +107,10 @@ export class MessageQueueWorker {
         const db = await getDb();
         if (!db) return;
 
-        // Lock item by setting status to 'processing'
-        await db.update(messageQueue)
-            .set({ status: 'processing', attempts: item.attempts + 1 })
-            .where(eq(messageQueue.id, item.id));
+        // Item is already locked and marked processing by the transaction in processQueue
+        // Just verify db existence
+        // await db.update(messageQueue)... REMOVED
+
 
         try {
             // Fetch full context: Message, Conversation, Connection
