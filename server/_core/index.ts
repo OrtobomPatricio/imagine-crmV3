@@ -318,6 +318,11 @@ async function startServer() {
     import("../services/whatsapp-restorer").then(({ startWhatsAppSessions }) => {
       startWhatsAppSessions().catch(err => logger.error({ err: safeError(err) }, "[WhatsAppSession] startup failed"));
     });
+
+    // WhatsApp connection health check (every 5 min)
+    import("../services/wa-health-check").then(({ startWAHealthCheck }) => {
+      startWAHealthCheck();
+    }).catch(err => logger.error({ err: safeError(err) }, "[WAHealthCheck] startup failed"));
   });
 }
 
