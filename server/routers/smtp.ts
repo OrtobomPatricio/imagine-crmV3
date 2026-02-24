@@ -34,7 +34,8 @@ export const smtpRouter = router({
             // Let's encrypt it.
             const encryptedPass = encryptSecret(input.password);
 
-            const [result] = await db.insert(smtpConnections).values({ tenantId: ctx.tenantId, 
+            const [result] = await db.insert(smtpConnections).values({
+                tenantId: ctx.tenantId,
                 ...input,
                 password: encryptedPass, // Storing encrypted
                 isActive: true,
@@ -138,6 +139,7 @@ export const smtpRouter = router({
         .input(z.object({ email: z.string().includes("@") }))
         .mutation(async ({ input, ctx }) => {
             const sent = await sendEmail({
+                tenantId: ctx.tenantId,
                 to: input.email,
                 subject: "Test SMTP Connection - Imagine CRM",
                 html: "<p>If you see this, your SMTP configuration is working correctly! 🚀</p>",

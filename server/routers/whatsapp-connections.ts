@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { whatsappConnections, whatsappNumbers } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -14,7 +14,7 @@ export const whatsappConnectionsRouter = router({
 
             const result = await db.select()
                 .from(whatsappConnections)
-                .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId))
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)))
                 .limit(1);
 
             const row = result[0] ?? null;
@@ -48,7 +48,7 @@ export const whatsappConnectionsRouter = router({
             // Check if connection exists
             const existing = await db.select()
                 .from(whatsappConnections)
-                .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId))
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)))
                 .limit(1);
 
             if (existing[0]) {
@@ -60,9 +60,10 @@ export const whatsappConnectionsRouter = router({
                         businessAccountId: input.businessAccountId,
                         isConnected: true,
                     })
-                    .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId));
+                    .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)));
             } else {
-                await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
+                await db.insert(whatsappConnections).values({
+                    tenantId: ctx.tenantId,
                     whatsappNumberId: input.whatsappNumberId,
                     connectionType: 'api',
                     accessToken: encryptedToken,
@@ -75,7 +76,7 @@ export const whatsappConnectionsRouter = router({
             // Update whatsapp number status
             await db.update(whatsappNumbers)
                 .set({ isConnected: true, status: 'active' })
-                .where(eq(whatsappNumbers.id, input.whatsappNumberId));
+                .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.whatsappNumberId)));
 
             return { success: true };
         }),
@@ -89,11 +90,12 @@ export const whatsappConnectionsRouter = router({
             // Check if connection exists
             let existing = await db.select()
                 .from(whatsappConnections)
-                .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId))
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)))
                 .limit(1);
 
             if (!existing[0]) {
-                await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
+                await db.insert(whatsappConnections).values({
+                    tenantId: ctx.tenantId,
                     whatsappNumberId: input.whatsappNumberId,
                     connectionType: 'qr',
                     isConnected: false,
@@ -106,7 +108,7 @@ export const whatsappConnectionsRouter = router({
                 const expiresAt = new Date(Date.now() + 60000);
                 await db.update(whatsappConnections)
                     .set({ qrCode: qr, qrExpiresAt: expiresAt })
-                    .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId));
+                    .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)));
                 return { qrCode: qr, expiresAt };
             }
 
@@ -123,7 +125,7 @@ export const whatsappConnectionsRouter = router({
                     // Update DB with latest QR
                     await db.update(whatsappConnections)
                         .set({ qrCode: qr, qrExpiresAt: new Date(Date.now() + 60000) }) // 1 min validity for UI
-                        .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId));
+                        .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)));
                 },
                 async (status) => {
                     const isConnected = status === 'connected';
@@ -134,12 +136,12 @@ export const whatsappConnectionsRouter = router({
                             lastPingAt: new Date(),
                             ...(isConnected ? { qrCode: null as any, qrExpiresAt: null as any } : {})
                         })
-                        .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId));
+                        .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)));
 
                     if (isConnected) {
                         await db.update(whatsappNumbers)
                             .set({ isConnected: true, status: 'active' })
-                            .where(eq(whatsappNumbers.id, input.whatsappNumberId));
+                            .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.whatsappNumberId)));
                     }
                 }
             );
@@ -175,18 +177,18 @@ export const whatsappConnectionsRouter = router({
 
             // 2. Clear QR code and connection status in DB
             await db.update(whatsappConnections)
-                .set({ 
-                    isConnected: false, 
+                .set({
+                    isConnected: false,
                     qrCode: null,
                     qrExpiresAt: null,
                     sessionData: null,
                 })
-                .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId));
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId)));
 
             // 3. Mark whatsapp number as disconnected
             await db.update(whatsappNumbers)
                 .set({ isConnected: false, status: 'disconnected' })
-                .where(eq(whatsappNumbers.id, input.whatsappNumberId));
+                .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.whatsappNumberId)));
 
             console.log(`[WhatsApp Disconnect] Number ${input.whatsappNumberId} marked as disconnected in database`);
 

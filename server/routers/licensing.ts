@@ -20,7 +20,7 @@ export const licensingRouter = router({
         }
 
         // Get license (single tenant for now)
-        const [licenseRow] = await db.select().from(license).limit(1);
+        const [licenseRow] = await db.select().from(license).where(eq(license.tenantId, ctx.tenantId)).limit(1);
 
         // Get current usage
         const now = new Date();
@@ -30,6 +30,7 @@ export const licensingRouter = router({
         const [usageRow] = await db.select()
             .from(usageTracking)
             .where(and(
+                eq(usageTracking.tenantId, ctx.tenantId),
                 eq(usageTracking.year, year),
                 eq(usageTracking.month, month)
             ));
@@ -37,17 +38,17 @@ export const licensingRouter = router({
         // Calculate actual usage
         const activeUsers = await db.select({ count: sql<number>`count(*)` })
             .from(users)
-            .where(eq(users.isActive, true));
+            .where(and(eq(users.tenantId, ctx.tenantId), eq(users.isActive, true)));
 
         const activeNumbers = await db.select({ count: sql<number>`count(*)` })
             .from(whatsappNumbers)
-            .where(eq(whatsappNumbers.isConnected, true));
+            .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.isConnected, true)));
 
         // Count messages this month
         const startOfMonth = new Date(year, month - 1, 1);
         const messagesThisMonth = await db.select({ count: sql<number>`count(*)` })
             .from(chatMessages)
-            .where(sql`${chatMessages.createdAt} >= ${startOfMonth} AND ${chatMessages.direction} = 'outbound'`);
+            .where(and(eq(chatMessages.tenantId, ctx.tenantId), sql`${chatMessages.createdAt} >= ${startOfMonth} AND ${chatMessages.direction} = 'outbound'`));
 
         const defaultLicense = {
             status: 'trial' as const,
@@ -109,7 +110,7 @@ export const licensingRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const [existing] = await db.select().from(license).limit(1);
+            const [existing] = await db.select().from(license).where(eq(license.tenantId, ctx.tenantId)).limit(1);
 
             if (existing) {
                 await db.update(license)
@@ -117,7 +118,7 @@ export const licensingRouter = router({
                         ...input,
                         updatedAt: new Date(),
                     })
-                    .where(eq(license.id, existing.id));
+                    .where(and(eq(license.tenantId, ctx.tenantId), eq(license.id, existing.id)));
             } else {
                 if (!input.key) throw new Error("License key is required");
                 await db.insert(license).values({
@@ -148,6 +149,7 @@ export const licensingRouter = router({
 
             const history = await db.select()
                 .from(usageTracking)
+                .where(eq(usageTracking.tenantId, ctx.tenantId))
                 .orderBy(sql`${usageTracking.year} DESC, ${usageTracking.month} DESC`)
                 .limit(input.months);
 
@@ -159,6 +161,7 @@ export const licensingRouter = router({
      */
     recordUsage: publicProcedure
         .input(z.object({
+            tenantId: z.number().default(1),
             messagesSent: z.number().optional(),
             messagesReceived: z.number().optional(),
         }))
@@ -173,6 +176,7 @@ export const licensingRouter = router({
             const [existing] = await db.select()
                 .from(usageTracking)
                 .where(and(
+                    eq(usageTracking.tenantId, input.tenantId),
                     eq(usageTracking.year, year),
                     eq(usageTracking.month, month)
                 ));
@@ -184,10 +188,10 @@ export const licensingRouter = router({
                         messagesReceived: sql`${usageTracking.messagesReceived} + ${input.messagesReceived || 0}`,
                         updatedAt: new Date(),
                     })
-                    .where(eq(usageTracking.id, existing.id));
+                    .where(and(eq(usageTracking.tenantId, input.tenantId), eq(usageTracking.id, existing.id)));
             } else {
                 await db.insert(usageTracking).values({
-                    tenantId: 1,
+                    tenantId: input.tenantId,
                     year,
                     month,
                     messagesSent: input.messagesSent || 0,
@@ -203,12 +207,13 @@ export const licensingRouter = router({
  */
 export async function checkLicenseLimit(
     limitType: 'users' | 'whatsappNumbers' | 'messages',
-    currentCount: number
+    currentCount: number,
+    tenantId: number
 ): Promise<{ allowed: boolean; reason?: string }> {
     const db = await getDb();
     if (!db) return { allowed: true }; // Allow if no DB (dev mode)
 
-    const [lic] = await db.select().from(license).limit(1);
+    const [lic] = await db.select().from(license).where(eq(license.tenantId, tenantId)).limit(1);
 
     if (!lic || lic.status === 'expired' || lic.status === 'canceled') {
         return { allowed: false, reason: "Licencia expirada o cancelada" };
@@ -245,13 +250,13 @@ export function requireLicense(limitType: 'users' | 'whatsappNumbers' | 'message
             case 'users':
                 const userCount = await db.select({ count: sql<number>`count(*)` })
                     .from(users)
-                    .where(eq(users.isActive, true));
+                    .where(and(eq(users.tenantId, ctx.tenantId), eq(users.isActive, true)));
                 currentCount = userCount[0]?.count || 0;
                 break;
             case 'whatsappNumbers':
                 const numberCount = await db.select({ count: sql<number>`count(*)` })
                     .from(whatsappNumbers)
-                    .where(eq(whatsappNumbers.isConnected, true));
+                    .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.isConnected, true)));
                 currentCount = numberCount[0]?.count || 0;
                 break;
             case 'messages':
@@ -259,12 +264,12 @@ export function requireLicense(limitType: 'users' | 'whatsappNumbers' | 'message
                 const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 const msgCount = await db.select({ count: sql<number>`count(*)` })
                     .from(chatMessages)
-                    .where(sql`${chatMessages.createdAt} >= ${startOfMonth} AND ${chatMessages.direction} = 'outbound'`);
+                    .where(and(eq(chatMessages.tenantId, ctx.tenantId), sql`${chatMessages.createdAt} >= ${startOfMonth} AND ${chatMessages.direction} = 'outbound'`));
                 currentCount = msgCount[0]?.count || 0;
                 break;
         }
 
-        const check = await checkLicenseLimit(limitType, currentCount);
+        const check = await checkLicenseLimit(limitType, currentCount, ctx.tenantId);
         if (!check.allowed) {
             throw new Error(check.reason);
         }

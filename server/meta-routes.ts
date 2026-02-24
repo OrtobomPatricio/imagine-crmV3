@@ -16,14 +16,18 @@ export function registerMetaRoutes(app: Express) {
     app.get("/api/meta/connect", async (req: Request, res: Response) => {
         try {
             const database = await db.getDb();
-            const settings = await getOrCreateAppSettings(database);
+            const tenantIdStr = req.query.tenantId as string;
+            const tenantId = tenantIdStr ? parseInt(tenantIdStr, 10) : undefined;
+            if (!tenantId) return res.status(400).send("tenantId is required");
+
+            const settings = await getOrCreateAppSettings(database, tenantId);
             const appId = settings.metaConfig?.appId || process.env.META_APP_ID;
 
             const redirectUri = `${process.env.VITE_API_URL || "http://localhost:3000"}/api/meta/callback`;
             const scope = "business_management,whatsapp_business_management,whatsapp_business_messaging";
 
-            // State should be random string for security
-            const state = Math.random().toString(36).substring(7);
+            // State should be random string + tenantId for security
+            const state = Math.random().toString(36).substring(7) + `_t${tenantId}`;
 
             if (!appId) return res.status(500).send("META_APP_ID is not configured in Settings");
 
@@ -51,7 +55,14 @@ export function registerMetaRoutes(app: Express) {
 
         try {
             const database = await db.getDb();
-            const settings = await getOrCreateAppSettings(database);
+            const stateStr = (state as string) || "";
+            const tenantMatch = stateStr.match(/_t(\d+)$/);
+            const tenantId = tenantMatch ? parseInt(tenantMatch[1], 10) : undefined;
+
+            if (!tenantId) {
+                return res.redirect("/settings?tab=distribution&error=missing_tenant");
+            }
+            const settings = await getOrCreateAppSettings(database, tenantId);
             const appId = settings.metaConfig?.appId || process.env.META_APP_ID;
             const appSecretStored = settings.metaConfig?.appSecret || process.env.META_APP_SECRET;
             const appSecret = decryptSecret(appSecretStored) || "";
@@ -124,7 +135,8 @@ export function registerMetaRoutes(app: Express) {
                     const rawPhone = phone.display_phone_number.replace(/\D/g, "");
 
                     // Insert number
-                    const numRes = await database.insert(whatsappNumbers).values({ tenantId: 1, 
+                    const numRes = await database.insert(whatsappNumbers).values({
+                        tenantId: tenantId,
                         phoneNumber: rawPhone,
                         displayName: phone.display_phone_number, // or name_status?
                         country: "Unknown", // we'd need to parse code
@@ -136,7 +148,8 @@ export function registerMetaRoutes(app: Express) {
                     const numId = numRes[0].insertId;
 
                     // Insert connection
-                    await database.insert(whatsappConnections).values({ tenantId: 1, 
+                    await database.insert(whatsappConnections).values({
+                        tenantId: tenantId,
                         whatsappNumberId: numId,
                         connectionType: "api",
                         phoneNumberId: phone.id,
@@ -167,10 +180,8 @@ export function registerMetaRoutes(app: Express) {
         const challenge = req.query["hub.challenge"];
 
         try {
-            const database = await db.getDb();
-            const settings = await getOrCreateAppSettings(database);
-            // Verify Token should be setting or ENV
-            const verifyToken = settings.metaConfig?.verifyToken || process.env.META_WEBHOOK_VERIFY_TOKEN || "imagine_crm_verify";
+            // Verify Token should be ENV
+            const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || "imagine_crm_verify";
 
             if (mode === "subscribe" && token === verifyToken) {
                 res.status(200).send(challenge);

@@ -9,7 +9,7 @@ export const tagsRouter = router({
     list: permissionProcedure("leads.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(tags).orderBy(tags.name);
+        return db.select().from(tags).where(eq(tags.tenantId, ctx.tenantId)).orderBy(tags.name);
     }),
 
     create: permissionProcedure("settings.manage")
@@ -43,7 +43,7 @@ export const tagsRouter = router({
             if (!db) throw new Error("Database not available");
 
             const { id, ...updates } = input;
-            await db.update(tags).set(updates).where(eq(tags.id, id));
+            await db.update(tags).set(updates).where(and(eq(tags.tenantId, ctx.tenantId), eq(tags.id, id)));
             return { success: true };
         }),
 
@@ -52,7 +52,7 @@ export const tagsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.delete(tags).where(eq(tags.id, input.id));
+            await db.delete(tags).where(and(eq(tags.tenantId, ctx.tenantId), eq(tags.id, input.id)));
             return { success: true };
         }),
 
@@ -70,7 +70,7 @@ export const tagsRouter = router({
             })
                 .from(leadTags)
                 .innerJoin(tags, eq(leadTags.tagId, tags.id))
-                .where(eq(leadTags.leadId, input.leadId));
+                .where(and(eq(leadTags.tenantId, ctx.tenantId), eq(leadTags.leadId, input.leadId)));
         }),
 
     getLeadTagsBatch: permissionProcedure("leads.view")
@@ -87,7 +87,7 @@ export const tagsRouter = router({
             })
                 .from(leadTags)
                 .innerJoin(tags, eq(leadTags.tagId, tags.id))
-                .where(inArray(leadTags.leadId, input.leadIds));
+                .where(and(eq(leadTags.tenantId, ctx.tenantId), inArray(leadTags.leadId, input.leadIds)));
         }),
 
     addTagToLead: permissionProcedure("leads.edit")
@@ -113,6 +113,7 @@ export const tagsRouter = router({
 
             await db.delete(leadTags)
                 .where(and(
+                    eq(leadTags.tenantId, ctx.tenantId),
                     eq(leadTags.leadId, input.leadId),
                     eq(leadTags.tagId, input.tagId)
                 ));
@@ -130,7 +131,7 @@ export const tagsRouter = router({
             if (!db) throw new Error("Database not available");
 
             // Delete existing
-            await db.delete(leadTags).where(eq(leadTags.leadId, input.leadId));
+            await db.delete(leadTags).where(and(eq(leadTags.tenantId, ctx.tenantId), eq(leadTags.leadId, input.leadId)));
 
             // Insert new
             if (input.tagIds.length > 0) {
@@ -160,7 +161,7 @@ export const tagsRouter = router({
             })
                 .from(conversationTags)
                 .innerJoin(tags, eq(conversationTags.tagId, tags.id))
-                .where(eq(conversationTags.conversationId, input.conversationId));
+                .where(and(eq(conversationTags.tenantId, ctx.tenantId), eq(conversationTags.conversationId, input.conversationId)));
         }),
 
     addTagToConversation: permissionProcedure("chat.edit")
@@ -186,6 +187,7 @@ export const tagsRouter = router({
 
             await db.delete(conversationTags)
                 .where(and(
+                    eq(conversationTags.tenantId, ctx.tenantId),
                     eq(conversationTags.conversationId, input.conversationId),
                     eq(conversationTags.tagId, input.tagId)
                 ));
@@ -198,7 +200,7 @@ export const tagsRouter = router({
         const db = await getDb();
         if (!db) return { totalTags: 0, topTags: [] };
 
-        const totalTags = await db.select({ count: sql<number>`count(*)` }).from(tags);
+        const totalTags = await db.select({ count: sql<number>`count(*)` }).from(tags).where(eq(tags.tenantId, ctx.tenantId));
 
         const topTags = await db.select({
             tagId: tags.id,
@@ -208,6 +210,7 @@ export const tagsRouter = router({
         })
             .from(tags)
             .leftJoin(leadTags, eq(tags.id, leadTags.tagId))
+            .where(eq(tags.tenantId, ctx.tenantId))
             .groupBy(tags.id)
             .orderBy(sql`count(${leadTags.leadId}) desc`)
             .limit(10);

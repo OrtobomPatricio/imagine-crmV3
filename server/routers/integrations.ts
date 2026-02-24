@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { integrations } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -12,6 +12,7 @@ export const integrationsRouter = router({
 
         return db.select()
             .from(integrations)
+            .where(eq(integrations.tenantId, ctx.tenantId))
             .orderBy(desc(integrations.createdAt));
     }),
 
@@ -23,7 +24,7 @@ export const integrationsRouter = router({
 
             const result = await db.select()
                 .from(integrations)
-                .where(eq(integrations.id, input.id))
+                .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, input.id)))
                 .limit(1);
 
             return result[0] ?? null;
@@ -43,7 +44,8 @@ export const integrationsRouter = router({
 
             await assertSafeOutboundUrl(input.webhookUrl);
 
-            const result = await db.insert(integrations).values({ tenantId: ctx.tenantId, 
+            const result = await db.insert(integrations).values({
+                tenantId: ctx.tenantId,
                 ...input,
                 events: input.events ?? ['message_received', 'lead_created', 'lead_updated', 'campaign_sent'],
                 createdById: ctx.user?.id,
@@ -73,7 +75,7 @@ export const integrationsRouter = router({
             const { id, ...updateData } = input;
             await db.update(integrations)
                 .set(updateData)
-                .where(eq(integrations.id, id));
+                .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, id)));
 
             return { success: true };
         }),
@@ -84,7 +86,7 @@ export const integrationsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            await db.delete(integrations).where(eq(integrations.id, input.id));
+            await db.delete(integrations).where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, input.id)));
             return { success: true };
         }),
 
@@ -99,7 +101,7 @@ export const integrationsRouter = router({
 
             await db.update(integrations)
                 .set({ isActive: input.isActive })
-                .where(eq(integrations.id, input.id));
+                .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, input.id)));
 
             return { success: true };
         }),
@@ -112,7 +114,7 @@ export const integrationsRouter = router({
 
             const integration = await db.select()
                 .from(integrations)
-                .where(eq(integrations.id, input.id))
+                .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, input.id)))
                 .limit(1);
 
             if (!integration[0]) throw new Error("Integration not found");
@@ -141,7 +143,7 @@ export const integrationsRouter = router({
                 if (response.ok) {
                     await db.update(integrations)
                         .set({ lastTriggeredAt: new Date() })
-                        .where(eq(integrations.id, input.id));
+                        .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, input.id)));
                     return { success: true, status: response.status };
                 } else {
                     return { success: false, status: response.status, error: 'Webhook returned error' };

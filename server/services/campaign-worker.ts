@@ -146,6 +146,7 @@ async function processEmailCampaignBatch(campaign: typeof campaigns.$inferSelect
             });
 
             const ok = await sendEmail({
+                tenantId: campaign.tenantId,
                 to: String(lead.email),
                 subject: campaign.name,
                 html,

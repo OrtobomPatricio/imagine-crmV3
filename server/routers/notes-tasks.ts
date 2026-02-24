@@ -11,7 +11,7 @@ export const notesTasksRouter = router({
         .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
-            
+
             return db.select({
                 id: leadNotes.id,
                 content: leadNotes.content,
@@ -22,10 +22,10 @@ export const notesTasksRouter = router({
                     name: users.name,
                 },
             })
-            .from(leadNotes)
-            .leftJoin(users, eq(leadNotes.createdById, users.id))
-            .where(eq(leadNotes.leadId, input.leadId))
-            .orderBy(desc(leadNotes.createdAt));
+                .from(leadNotes)
+                .leftJoin(users, eq(leadNotes.createdById, users.id))
+                .where(and(eq(leadNotes.tenantId, ctx.tenantId), eq(leadNotes.leadId, input.leadId)))
+                .orderBy(desc(leadNotes.createdAt));
         }),
 
     createNote: permissionProcedure("leads.edit")
@@ -36,13 +36,14 @@ export const notesTasksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
-            const result = await db.insert(leadNotes).values({ tenantId: ctx.tenantId, 
+
+            const result = await db.insert(leadNotes).values({
+                tenantId: ctx.tenantId,
                 leadId: input.leadId,
                 content: input.content,
                 createdById: ctx.user?.id,
             });
-            
+
             return { id: result[0].insertId, success: true };
         }),
 
@@ -54,11 +55,11 @@ export const notesTasksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
+
             await db.update(leadNotes)
                 .set({ content: input.content })
-                .where(eq(leadNotes.id, input.id));
-            
+                .where(and(eq(leadNotes.tenantId, ctx.tenantId), eq(leadNotes.id, input.id)));
+
             return { success: true };
         }),
 
@@ -67,8 +68,8 @@ export const notesTasksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
-            await db.delete(leadNotes).where(eq(leadNotes.id, input.id));
+
+            await db.delete(leadNotes).where(and(eq(leadNotes.tenantId, ctx.tenantId), eq(leadNotes.id, input.id)));
             return { success: true };
         }),
 
@@ -82,7 +83,7 @@ export const notesTasksRouter = router({
         .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
-            
+
             let query = db.select({
                 id: leadTasks.id,
                 leadId: leadTasks.leadId,
@@ -103,21 +104,21 @@ export const notesTasksRouter = router({
                     phone: leads.phone,
                 },
             })
-            .from(leadTasks)
-            .leftJoin(users, eq(leadTasks.assignedToId, users.id))
-            .leftJoin(leads, eq(leadTasks.leadId, leads.id));
-            
-            const conditions = [];
+                .from(leadTasks)
+                .leftJoin(users, eq(leadTasks.assignedToId, users.id))
+                .leftJoin(leads, eq(leadTasks.leadId, leads.id));
+
+            const conditions = [eq(leadTasks.tenantId, ctx.tenantId)];
             if (input.leadId) conditions.push(eq(leadTasks.leadId, input.leadId));
             if (input.status) conditions.push(eq(leadTasks.status, input.status));
             if (input.assignedToMe && ctx.user) {
                 conditions.push(eq(leadTasks.assignedToId, ctx.user.id));
             }
-            
+
             if (conditions.length > 0) {
                 query = query.where(and(...conditions)) as any;
             }
-            
+
             return query.orderBy(asc(leadTasks.dueDate), desc(leadTasks.createdAt));
         }),
 
@@ -133,8 +134,9 @@ export const notesTasksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
-            const result = await db.insert(leadTasks).values({ tenantId: ctx.tenantId, 
+
+            const result = await db.insert(leadTasks).values({
+                tenantId: ctx.tenantId,
                 leadId: input.leadId,
                 title: input.title,
                 description: input.description,
@@ -143,7 +145,7 @@ export const notesTasksRouter = router({
                 assignedToId: input.assignedToId,
                 createdById: ctx.user?.id,
             });
-            
+
             return { id: result[0].insertId, success: true };
         }),
 
@@ -160,14 +162,14 @@ export const notesTasksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
+
             const { id, ...updates } = input;
-            
+
             if (updates.status === "completed") {
                 (updates as any).completedAt = new Date();
             }
-            
-            await db.update(leadTasks).set(updates).where(eq(leadTasks.id, id));
+
+            await db.update(leadTasks).set(updates).where(and(eq(leadTasks.tenantId, ctx.tenantId), eq(leadTasks.id, id)));
             return { success: true };
         }),
 
@@ -176,8 +178,8 @@ export const notesTasksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
-            await db.delete(leadTasks).where(eq(leadTasks.id, input.id));
+
+            await db.delete(leadTasks).where(and(eq(leadTasks.tenantId, ctx.tenantId), eq(leadTasks.id, input.id)));
             return { success: true };
         }),
 
@@ -185,25 +187,27 @@ export const notesTasksRouter = router({
     getTaskStats: permissionProcedure("dashboard.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return { pending: 0, overdue: 0, today: 0, mine: 0 };
-        
+
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         const [pending, overdue, todayTasks, mine] = await Promise.all([
             db.select({ count: sql<number>`count(*)` })
                 .from(leadTasks)
-                .where(eq(leadTasks.status, "pending")),
+                .where(and(eq(leadTasks.tenantId, ctx.tenantId), eq(leadTasks.status, "pending"))),
             db.select({ count: sql<number>`count(*)` })
                 .from(leadTasks)
                 .where(and(
+                    eq(leadTasks.tenantId, ctx.tenantId),
                     eq(leadTasks.status, "pending"),
                     lte(leadTasks.dueDate, now)
                 )),
             db.select({ count: sql<number>`count(*)` })
                 .from(leadTasks)
                 .where(and(
+                    eq(leadTasks.tenantId, ctx.tenantId),
                     eq(leadTasks.status, "pending"),
                     gte(leadTasks.dueDate, today),
                     lte(leadTasks.dueDate, tomorrow)
@@ -211,11 +215,12 @@ export const notesTasksRouter = router({
             ctx.user ? db.select({ count: sql<number>`count(*)` })
                 .from(leadTasks)
                 .where(and(
+                    eq(leadTasks.tenantId, ctx.tenantId),
                     eq(leadTasks.status, "pending"),
                     eq(leadTasks.assignedToId, ctx.user.id)
                 )) : [{ count: 0 }],
         ]);
-        
+
         return {
             pending: pending[0]?.count || 0,
             overdue: overdue[0]?.count || 0,

@@ -19,7 +19,7 @@ export const securityRouter = router({
             let query = db.select().from(accessLogs).orderBy(desc(accessLogs.createdAt));
 
             // Apply filters
-            const conditions = [];
+            const conditions = [eq(accessLogs.tenantId, ctx.tenantId)];
             if (input.userId) conditions.push(eq(accessLogs.userId, input.userId));
             if (input.action) conditions.push(eq(accessLogs.action, input.action));
 
@@ -32,7 +32,7 @@ export const securityRouter = router({
             // Join with user names
             const userIds = Array.from(new Set(results.map(r => r.userId).filter(Boolean))) as number[];
             const usersList = userIds.length > 0
-                ? await db.select().from(users).where(sql`${users.id} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`)
+                ? await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), sql`${users.id} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`))
                 : [];
 
             const usersMap = new Map(usersList.map(u => [u.id, u.name]));

@@ -3,13 +3,15 @@ import { appSettings, facebookPages } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
 import { encryptSecret } from "../_core/crypto";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 export const facebookRouter = router({
     listPages: permissionProcedure("settings.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(facebookPages).orderBy(desc(facebookPages.createdAt));
+        return db.select().from(facebookPages)
+            .where(eq(facebookPages.tenantId, ctx.tenantId))
+            .orderBy(desc(facebookPages.createdAt));
     }),
 
     connectPage: permissionProcedure("settings.manage")
@@ -23,7 +25,9 @@ export const facebookRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const existing = await db.select().from(facebookPages).where(eq(facebookPages.pageId, input.pageId)).limit(1);
+            const existing = await db.select().from(facebookPages)
+                .where(and(eq(facebookPages.tenantId, ctx.tenantId), eq(facebookPages.pageId, input.pageId)))
+                .limit(1);
 
             if (existing[0]) {
                 await db.update(facebookPages).set({
@@ -32,9 +36,10 @@ export const facebookRouter = router({
                     pictureUrl: input.pictureUrl,
                     isConnected: true,
                     updatedAt: new Date(),
-                }).where(eq(facebookPages.id, existing[0].id));
+                }).where(and(eq(facebookPages.tenantId, ctx.tenantId), eq(facebookPages.id, existing[0].id)));
             } else {
-                await db.insert(facebookPages).values({ tenantId: ctx.tenantId, 
+                await db.insert(facebookPages).values({
+                    tenantId: ctx.tenantId,
                     pageId: input.pageId,
                     name: input.name,
                     accessToken: encryptSecret(input.accessToken),
@@ -53,7 +58,7 @@ export const facebookRouter = router({
 
             await db.update(facebookPages)
                 .set({ isConnected: false, accessToken: null })
-                .where(eq(facebookPages.id, input.id));
+                .where(and(eq(facebookPages.tenantId, ctx.tenantId), eq(facebookPages.id, input.id)));
             return { success: true };
         }),
 });

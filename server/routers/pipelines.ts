@@ -9,7 +9,7 @@ export const pipelinesRouter = router({
         const db = await getDb();
         if (!db) return [];
 
-        let allPipelines = await db.select().from(pipelines);
+        let allPipelines = await db.select().from(pipelines).where(eq(pipelines.tenantId, ctx.tenantId));
 
         // Auto-create default pipeline if none exists
         if (allPipelines.length === 0) {
@@ -41,10 +41,10 @@ export const pipelinesRouter = router({
                 });
             }
 
-            allPipelines = await db.select().from(pipelines);
+            allPipelines = await db.select().from(pipelines).where(eq(pipelines.tenantId, ctx.tenantId));
         }
 
-        const allStages = await db.select().from(pipelineStages).orderBy(asc(pipelineStages.order));
+        const allStages = await db.select().from(pipelineStages).where(eq(pipelineStages.tenantId, ctx.tenantId)).orderBy(asc(pipelineStages.order));
 
         return allPipelines.map(p => ({
             ...p,
@@ -93,7 +93,7 @@ export const pipelinesRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
-            await db.update(pipelineStages).set(input).where(eq(pipelineStages.id, input.id));
+            await db.update(pipelineStages).set(input).where(and(eq(pipelineStages.tenantId, ctx.tenantId), eq(pipelineStages.id, input.id)));
             return { success: true };
         }),
 
@@ -120,7 +120,7 @@ export const pipelinesRouter = router({
 
             // Optional: Check if leads exist? Schema says ON DELETE SET NULL, so it's safe.
             // But maybe we want to warn? For now, just delete.
-            await db.delete(pipelineStages).where(eq(pipelineStages.id, input.id));
+            await db.delete(pipelineStages).where(and(eq(pipelineStages.tenantId, ctx.tenantId), eq(pipelineStages.id, input.id)));
             return { success: true };
         }),
 
@@ -141,6 +141,7 @@ export const pipelinesRouter = router({
             await db.update(pipelineStages)
                 .set({ order: caseExpr } as any)
                 .where(and(
+                    eq(pipelineStages.tenantId, ctx.tenantId),
                     eq(pipelineStages.pipelineId, input.pipelineId),
                     inArray(pipelineStages.id, ids)
                 ));

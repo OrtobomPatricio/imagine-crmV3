@@ -8,7 +8,7 @@ export const campaignsRouter = router({
     list: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(campaigns).orderBy(desc(campaigns.createdAt));
+        return db.select().from(campaigns).where(eq(campaigns.tenantId, ctx.tenantId)).orderBy(desc(campaigns.createdAt));
     }),
 
     create: permissionProcedure("campaigns.manage")
@@ -22,7 +22,8 @@ export const campaignsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            const result = await db.insert(campaigns).values({ tenantId: ctx.tenantId, 
+            const result = await db.insert(campaigns).values({
+                tenantId: ctx.tenantId,
                 ...input,
                 status: "draft",
             });
@@ -40,7 +41,7 @@ export const campaignsRouter = router({
             if (!db) return { count: 0 };
 
             // Simple filter by stage for now
-            const conditions = [];
+            const conditions = [eq(leads.tenantId, ctx.tenantId)];
             if (input.pipelineStageId) {
                 conditions.push(eq(leads.pipelineStageId, input.pipelineStageId));
             }
@@ -57,7 +58,7 @@ export const campaignsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("DB error");
 
-            const campaign = await db.select().from(campaigns).where(eq(campaigns.id, input.campaignId)).limit(1);
+            const campaign = await db.select().from(campaigns).where(and(eq(campaigns.tenantId, ctx.tenantId), eq(campaigns.id, input.campaignId))).limit(1);
             if (!campaign[0]) throw new Error("Campaign not found");
 
             // IDEMPOTENCY: Check campaign status first
@@ -77,7 +78,7 @@ export const campaignsRouter = router({
             const config = campaign[0].audienceConfig as any;
 
             // Fetch audience
-            const conditions = [];
+            const conditions: any[] = [eq(leads.tenantId, ctx.tenantId)];
             if (config?.pipelineStageId) {
                 conditions.push(eq(leads.pipelineStageId, config.pipelineStageId));
             }
@@ -93,7 +94,8 @@ export const campaignsRouter = router({
             let insertedCount = 0;
             for (const lead of audience) {
                 try {
-                    await db.insert(campaignRecipients).values({ tenantId: ctx.tenantId, 
+                    await db.insert(campaignRecipients).values({
+                        tenantId: ctx.tenantId,
                         campaignId: input.campaignId,
                         leadId: lead.id,
                         status: "pending",
@@ -111,7 +113,7 @@ export const campaignsRouter = router({
                 status: "scheduled", // Or running immediately
                 totalRecipients: audience.length,
                 startedAt: new Date(),
-            }).where(eq(campaigns.id, input.campaignId));
+            }).where(and(eq(campaigns.tenantId, ctx.tenantId), eq(campaigns.id, input.campaignId)));
 
             // TODO: Trigger actual sending process (Queue/Worker)
 
@@ -126,7 +128,7 @@ export const campaignsRouter = router({
 
             const result = await db.select()
                 .from(campaigns)
-                .where(eq(campaigns.id, input.id))
+                .where(and(eq(campaigns.tenantId, ctx.tenantId), eq(campaigns.id, input.id)))
                 .limit(1);
 
             return result[0] ?? null;
@@ -138,7 +140,7 @@ export const campaignsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            await db.delete(campaigns).where(eq(campaigns.id, input.id));
+            await db.delete(campaigns).where(and(eq(campaigns.tenantId, ctx.tenantId), eq(campaigns.id, input.id)));
             return { success: true };
         }),
 });

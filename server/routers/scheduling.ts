@@ -11,6 +11,7 @@ export const schedulingRouter = router({
 
         return db.select()
             .from(appointments)
+            .where(eq(appointments.tenantId, ctx.tenantId))
             .orderBy(desc(appointments.appointmentDate));
     }),
 
@@ -20,7 +21,7 @@ export const schedulingRouter = router({
 
         return db.select()
             .from(appointmentReasons)
-            .where(eq(appointmentReasons.isActive, true))
+            .where(and(eq(appointmentReasons.tenantId, ctx.tenantId), eq(appointmentReasons.isActive, true)))
             .orderBy(appointmentReasons.name);
     }),
 
@@ -44,7 +45,7 @@ export const schedulingRouter = router({
             normalizedDate.setHours(0, 0, 0, 0);
 
             // Load scheduling rules
-            const settingsRows = await db.select().from(appSettings).limit(1);
+            const settingsRows = await db.select().from(appSettings).where(eq(appSettings.tenantId, ctx.tenantId)).limit(1);
             const maxPerSlot = (settingsRows[0] as any)?.scheduling?.maxPerSlot ?? 6;
 
             // Allow up to N appointments per exact time slot (configurable in Settings)
@@ -53,6 +54,7 @@ export const schedulingRouter = router({
                 .from(appointments)
                 .where(
                     and(
+                        eq(appointments.tenantId, ctx.tenantId),
                         eq(appointments.appointmentDate, normalizedDate),
                         eq(appointments.appointmentTime, input.appointmentTime)
                     )
@@ -100,7 +102,7 @@ export const schedulingRouter = router({
 
             await db.update(appointments)
                 .set(updateData)
-                .where(eq(appointments.id, id));
+                .where(and(eq(appointments.tenantId, ctx.tenantId), eq(appointments.id, id)));
 
             return { success: true };
         }),
@@ -111,7 +113,7 @@ export const schedulingRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            await db.delete(appointments).where(eq(appointments.id, input.id));
+            await db.delete(appointments).where(and(eq(appointments.tenantId, ctx.tenantId), eq(appointments.id, input.id)));
             return { success: true };
         }),
 
@@ -136,7 +138,7 @@ export const schedulingRouter = router({
 
             await db.update(appointmentReasons)
                 .set({ isActive: false })
-                .where(eq(appointmentReasons.id, input.id));
+                .where(and(eq(appointmentReasons.tenantId, ctx.tenantId), eq(appointmentReasons.id, input.id)));
             return { success: true };
         }),
 
@@ -144,7 +146,7 @@ export const schedulingRouter = router({
     getTemplates: protectedProcedure.query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(reminderTemplates).where(eq(reminderTemplates.isActive, true));
+        return db.select().from(reminderTemplates).where(and(eq(reminderTemplates.tenantId, ctx.tenantId), eq(reminderTemplates.isActive, true)));
     }),
 
     saveTemplate: permissionProcedure("scheduling.manage")
@@ -160,7 +162,7 @@ export const schedulingRouter = router({
             if (input.id) {
                 await db.update(reminderTemplates).set({
                     name: input.name, content: input.content, daysBefore: input.daysBefore
-                }).where(eq(reminderTemplates.id, input.id));
+                }).where(and(eq(reminderTemplates.tenantId, ctx.tenantId), eq(reminderTemplates.id, input.id)));
                 return { success: true, id: input.id };
             } else {
                 const res = await db.insert(reminderTemplates).values({
@@ -176,7 +178,7 @@ export const schedulingRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
-            await db.delete(reminderTemplates).where(eq(reminderTemplates.id, input.id));
+            await db.delete(reminderTemplates).where(and(eq(reminderTemplates.tenantId, ctx.tenantId), eq(reminderTemplates.id, input.id)));
             return { success: true };
         }),
 });

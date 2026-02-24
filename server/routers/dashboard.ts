@@ -23,14 +23,14 @@ export const dashboardRouter = router({
         }
 
         // Get lead counts
-        const leadCount = await db.select({ count: count() }).from(leads);
+        const leadCount = await db.select({ count: count() }).from(leads).where(eq(leads.tenantId, ctx.tenantId));
         const totalLeads = leadCount[0]?.count ?? 0;
 
         // Get number stats
         const numberStats = await db.select({
             status: whatsappNumbers.status,
             count: count(),
-        }).from(whatsappNumbers).groupBy(whatsappNumbers.status);
+        }).from(whatsappNumbers).where(eq(whatsappNumbers.tenantId, ctx.tenantId)).groupBy(whatsappNumbers.status);
 
         const totalNumbers = numberStats.reduce((acc, s) => acc + s.count, 0);
         const activeNumbers = numberStats.find(s => s.status === 'active')?.count ?? 0;
@@ -42,13 +42,13 @@ export const dashboardRouter = router({
         today.setHours(0, 0, 0, 0);
         const messagesTodayResult = await db.select({
             total: sql<number>`SUM(${whatsappNumbers.messagesSentToday})`,
-        }).from(whatsappNumbers);
+        }).from(whatsappNumbers).where(eq(whatsappNumbers.tenantId, ctx.tenantId));
         const messagesToday = messagesTodayResult[0]?.total ?? 0;
 
         // Get conversion rate
         const wonLeads = await db.select({ count: count() })
             .from(leads)
-            .where(eq(leads.status, 'won'));
+            .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.status, 'won')));
         const conversionRate = totalLeads > 0
             ? Math.round((wonLeads[0]?.count ?? 0) / totalLeads * 100)
             : 0;
@@ -56,7 +56,7 @@ export const dashboardRouter = router({
         // Get warmup numbers
         const warmupNumbersList = await db.select()
             .from(whatsappNumbers)
-            .where(eq(whatsappNumbers.status, 'warming_up'))
+            .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.status, 'warming_up')))
             .orderBy(desc(whatsappNumbers.warmupDay))
             .limit(5);
 
@@ -64,11 +64,12 @@ export const dashboardRouter = router({
         const countriesDistribution = await db.select({
             country: whatsappNumbers.country,
             count: count(),
-        }).from(whatsappNumbers).groupBy(whatsappNumbers.country);
+        }).from(whatsappNumbers).where(eq(whatsappNumbers.tenantId, ctx.tenantId)).groupBy(whatsappNumbers.country);
 
         // Get recent leads
         const recentLeads = await db.select()
             .from(leads)
+            .where(eq(leads.tenantId, ctx.tenantId))
             .orderBy(desc(leads.createdAt))
             .limit(5);
 
@@ -101,7 +102,7 @@ export const dashboardRouter = router({
                 })
                 .from(leads)
                 .leftJoin(pipelineStages, eq(leads.pipelineStageId, pipelineStages.id))
-                .where(sql`${leads.pipelineStageId} IS NOT NULL`)
+                .where(and(eq(leads.tenantId, ctx.tenantId), sql`${leads.pipelineStageId} IS NOT NULL`))
                 .groupBy(leads.pipelineStageId, pipelineStages.name, pipelineStages.color, pipelineStages.order)
                 .orderBy(asc(pipelineStages.order));
 
@@ -126,7 +127,7 @@ export const dashboardRouter = router({
                 })
                 .from(leads)
                 .leftJoin(users, eq(leads.assignedToId, users.id))
-                .where(eq(leads.status, "won"))
+                .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.status, "won")))
                 .groupBy(leads.assignedToId, users.name)
                 .orderBy(desc(sql`count(*)`))
                 .limit(10);
@@ -159,6 +160,7 @@ export const dashboardRouter = router({
                 .leftJoin(appointmentReasons, eq(appointments.reasonId, appointmentReasons.id))
                 .where(
                     and(
+                        eq(appointments.tenantId, ctx.tenantId),
                         sql`${appointments.appointmentDate} >= CURDATE()`,
                         inArray(appointments.status, ["scheduled", "confirmed"])
                     )
@@ -185,6 +187,7 @@ export const dashboardRouter = router({
                 })
                 .from(activityLogs)
                 .leftJoin(users, eq(activityLogs.userId, users.id))
+                .where(eq(activityLogs.tenantId, ctx.tenantId))
                 .orderBy(desc(activityLogs.createdAt))
                 .limit(10);
 

@@ -21,8 +21,8 @@ export const webhooksRouter = router({
         .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
-            
-            return db.select().from(webhooks).orderBy(desc(webhooks.createdAt));
+
+            return db.select().from(webhooks).where(eq(webhooks.tenantId, ctx.tenantId)).orderBy(desc(webhooks.createdAt));
         }),
 
     // Create webhook
@@ -46,17 +46,18 @@ export const webhooksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
+
             const secret = generateSecret();
-            const result = await db.insert(webhooks).values({ tenantId: ctx.tenantId, 
+            const result = await db.insert(webhooks).values({
+                tenantId: ctx.tenantId,
                 ...input,
                 secret,
             });
-            
-            return { 
-                id: result[0].insertId, 
+
+            return {
+                id: result[0].insertId,
                 secret,
-                ...input 
+                ...input
             };
         }),
 
@@ -72,10 +73,10 @@ export const webhooksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
+
             const { id, ...updates } = input;
-            await db.update(webhooks).set(updates).where(eq(webhooks.id, id));
-            
+            await db.update(webhooks).set(updates).where(and(eq(webhooks.tenantId, ctx.tenantId), eq(webhooks.id, id)));
+
             return { success: true };
         }),
 
@@ -85,8 +86,8 @@ export const webhooksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
-            await db.delete(webhooks).where(eq(webhooks.id, input.id));
+
+            await db.delete(webhooks).where(and(eq(webhooks.tenantId, ctx.tenantId), eq(webhooks.id, input.id)));
             return { success: true };
         }),
 
@@ -96,12 +97,12 @@ export const webhooksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
+
             const secret = generateSecret();
             await db.update(webhooks)
                 .set({ secret })
-                .where(eq(webhooks.id, input.id));
-            
+                .where(and(eq(webhooks.tenantId, ctx.tenantId), eq(webhooks.id, input.id)));
+
             return { secret };
         }),
 
@@ -114,10 +115,10 @@ export const webhooksRouter = router({
         .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
-            
+
             return db.select()
                 .from(webhookDeliveries)
-                .where(eq(webhookDeliveries.webhookId, input.webhookId))
+                .where(and(eq(webhookDeliveries.tenantId, ctx.tenantId), eq(webhookDeliveries.webhookId, input.webhookId)))
                 .orderBy(desc(webhookDeliveries.createdAt))
                 .limit(input.limit);
         }),
@@ -128,26 +129,26 @@ export const webhooksRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            
+
             const webhook = await db.select()
                 .from(webhooks)
-                .where(eq(webhooks.id, input.id))
+                .where(and(eq(webhooks.tenantId, ctx.tenantId), eq(webhooks.id, input.id)))
                 .limit(1);
-            
+
             if (!webhook[0]) {
                 throw new Error("Webhook not found");
             }
-            
+
             // Send test payload
             const testPayload = {
                 event: "test",
                 data: { message: "This is a test webhook" },
                 timestamp: new Date().toISOString(),
             };
-            
+
             const body = JSON.stringify(testPayload);
             const signature = signPayload(body, webhook[0].secret);
-            
+
             try {
                 const response = await fetch(webhook[0].url, {
                     method: "POST",
@@ -159,10 +160,11 @@ export const webhooksRouter = router({
                     body,
                     signal: AbortSignal.timeout(30000),
                 });
-                
+
                 const responseBody = await response.text().catch(() => "");
-                
-                await db.insert(webhookDeliveries).values({ tenantId: ctx.tenantId, 
+
+                await db.insert(webhookDeliveries).values({
+                    tenantId: ctx.tenantId,
                     webhookId: input.id,
                     event: "test",
                     payload: body,
@@ -170,13 +172,14 @@ export const webhooksRouter = router({
                     responseBody: responseBody.slice(0, 1000),
                     success: response.ok,
                 });
-                
+
                 return {
                     success: response.ok,
                     status: response.status,
                 };
             } catch (error: any) {
-                await db.insert(webhookDeliveries).values({ tenantId: ctx.tenantId, 
+                await db.insert(webhookDeliveries).values({
+                    tenantId: ctx.tenantId,
                     webhookId: input.id,
                     event: "test",
                     payload: body,
@@ -184,7 +187,7 @@ export const webhooksRouter = router({
                     responseBody: error.message,
                     success: false,
                 });
-                
+
                 return {
                     success: false,
                     error: error.message,

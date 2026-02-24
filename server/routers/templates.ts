@@ -8,7 +8,7 @@ export const templatesRouter = router({
     list: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(templates).orderBy(desc(templates.createdAt));
+        return db.select().from(templates).where(eq(templates.tenantId, ctx.tenantId)).orderBy(desc(templates.createdAt));
     }),
 
     // Chat-friendly list: WhatsApp templates available to agents in the composer
@@ -24,14 +24,14 @@ export const templatesRouter = router({
                 return db
                     .select()
                     .from(templates)
-                    .where(and(eq(templates.type, "whatsapp"), or(like(templates.name, needle), like(templates.content, needle))))
+                    .where(and(eq(templates.tenantId, ctx.tenantId), eq(templates.type, "whatsapp"), or(like(templates.name, needle), like(templates.content, needle))))
                     .orderBy(desc(templates.createdAt));
             }
 
             return db
                 .select()
                 .from(templates)
-                .where(eq(templates.type, "whatsapp"))
+                .where(and(eq(templates.tenantId, ctx.tenantId), eq(templates.type, "whatsapp")))
                 .orderBy(desc(templates.createdAt));
         }),
 
@@ -70,7 +70,7 @@ export const templatesRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.update(templates).set(input).where(eq(templates.id, input.id));
+            await db.update(templates).set(input).where(and(eq(templates.tenantId, ctx.tenantId), eq(templates.id, input.id)));
             return { success: true };
         }),
 
@@ -79,7 +79,7 @@ export const templatesRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
-            await db.delete(templates).where(eq(templates.id, input.id));
+            await db.delete(templates).where(and(eq(templates.tenantId, ctx.tenantId), eq(templates.id, input.id)));
             return { success: true };
         }),
 });

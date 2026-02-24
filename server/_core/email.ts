@@ -5,18 +5,19 @@ import { desc } from 'drizzle-orm';
 import { decryptSecret } from './crypto';
 
 interface SendEmailOptions {
+    tenantId: number;
     to: string;
     subject: string;
     html?: string;
     text?: string;
 }
 
-export async function getSmtpConfig() {
+export async function getSmtpConfig(tenantId: number) {
     const db = await getDb();
     if (!db) return null;
 
     const { getOrCreateAppSettings } = await import("../services/app-settings");
-    const row = await getOrCreateAppSettings(db);
+    const row = await getOrCreateAppSettings(db, tenantId);
 
     if (!row.smtpConfig || !row.smtpConfig.host) return null;
 
@@ -30,8 +31,8 @@ export async function getSmtpConfig() {
     };
 }
 
-export async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
-    const config = await getSmtpConfig();
+export async function sendEmail({ tenantId, to, subject, html, text }: SendEmailOptions) {
+    const config = await getSmtpConfig(tenantId);
 
     // If no SMTP config, we just log it (in dev/preview)
     if (!config) {

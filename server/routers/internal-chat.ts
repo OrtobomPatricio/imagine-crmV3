@@ -19,7 +19,8 @@ export const internalChatRouter = router({
             const db = await getDb();
             if (!db || !ctx.user) throw new Error("Database not available");
 
-            await db.insert(internalMessages).values({ tenantId: ctx.tenantId, 
+            await db.insert(internalMessages).values({
+                tenantId: ctx.tenantId,
                 senderId: ctx.user.id,
                 recipientId: input.recipientId ?? null,
                 content: input.content,
@@ -49,7 +50,7 @@ export const internalChatRouter = router({
                 })
                     .from(internalMessages)
                     .leftJoin(users, eq(internalMessages.senderId, users.id))
-                    .where(sql`${internalMessages.recipientId} IS NULL`)
+                    .where(and(eq(internalMessages.tenantId, ctx.tenantId), sql`${internalMessages.recipientId} IS NULL`))
                     .orderBy(asc(internalMessages.createdAt))
                     .limit(100);
 
@@ -68,6 +69,7 @@ export const internalChatRouter = router({
                     .leftJoin(users, eq(internalMessages.senderId, users.id))
                     .where(
                         and(
+                            eq(internalMessages.tenantId, ctx.tenantId),
                             sql`(${internalMessages.senderId} = ${ctx.user.id} AND ${internalMessages.recipientId} = ${input.recipientId}) OR (${internalMessages.senderId} = ${input.recipientId} AND ${internalMessages.recipientId} = ${ctx.user.id})`
                         )
                     )
@@ -100,6 +102,7 @@ export const internalChatRouter = router({
                     .set({ isRead: true })
                     .where(
                         and(
+                            eq(internalMessages.tenantId, ctx.tenantId),
                             eq(internalMessages.senderId, input.senderId),
                             eq(internalMessages.recipientId, ctx.user.id),
                             eq(internalMessages.isRead, false)
@@ -118,7 +121,7 @@ export const internalChatRouter = router({
             name: users.name,
             role: users.role,
             isActive: users.isActive
-        }).from(users).where(eq(users.isActive, true));
+        }).from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.isActive, true)));
 
         // Get unread counts for each user
         // We can do this efficiently with a groupBy query
@@ -129,6 +132,7 @@ export const internalChatRouter = router({
             .from(internalMessages)
             .where(
                 and(
+                    eq(internalMessages.tenantId, ctx.tenantId),
                     eq(internalMessages.recipientId, ctx.user.id), // Sent to me
                     eq(internalMessages.isRead, false) // Not read
                 )

@@ -16,6 +16,7 @@ export const messagesRouter = router({
                 .from(conversations)
                 .where(
                     and(
+                        eq(conversations.tenantId, ctx.tenantId),
                         sql`${conversations.lastMessageAt} >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`,
                         eq(conversations.status, 'active')
                     )
@@ -29,6 +30,7 @@ export const messagesRouter = router({
                 .from(chatMessages)
                 .where(
                     and(
+                        eq(chatMessages.tenantId, ctx.tenantId),
                         eq(chatMessages.direction, 'inbound'),
                         sql`NOT EXISTS (
                 SELECT 1 FROM ${chatMessages} AS cm2
@@ -67,6 +69,7 @@ export const messagesRouter = router({
                 .from(conversations)
                 .where(
                     and(
+                        eq(conversations.tenantId, ctx.tenantId),
                         sql`${conversations.lastMessageAt} >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
                         eq(conversations.status, 'active')
                     )
@@ -102,6 +105,7 @@ export const messagesRouter = router({
                 .from(chatMessages)
                 .where(
                     and(
+                        eq(chatMessages.tenantId, ctx.tenantId),
                         eq(chatMessages.direction, 'outbound'),
                         sql`${chatMessages.createdAt} >= ${fromDate}`,
                         sql`${chatMessages.createdAt} <= ${toDate}`
@@ -122,6 +126,7 @@ export const messagesRouter = router({
                 .leftJoin(users, eq(conversations.assignedToId, users.id))
                 .where(
                     and(
+                        eq(chatMessages.tenantId, ctx.tenantId),
                         eq(chatMessages.direction, 'outbound'),
                         sql`${chatMessages.createdAt} >= ${fromDate}`,
                         sql`${chatMessages.createdAt} <= ${toDate}`,

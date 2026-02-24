@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { goals, achievements } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -9,7 +9,7 @@ export const gamificationRouter = router({
         list: protectedProcedure.query(async ({ ctx }) => {
             const db = await getDb();
             if (!db || !ctx.user) return [];
-            return db.select().from(achievements).where(eq(achievements.userId, ctx.user.id));
+            return db.select().from(achievements).where(and(eq(achievements.tenantId, ctx.tenantId), eq(achievements.userId, ctx.user.id)));
         }),
 
         unlock: protectedProcedure
@@ -17,7 +17,8 @@ export const gamificationRouter = router({
             .mutation(async ({ input, ctx }) => {
                 const db = await getDb();
                 if (!db || !ctx.user) return { success: false };
-                await db.insert(achievements).values({ tenantId: ctx.tenantId, 
+                await db.insert(achievements).values({
+                    tenantId: ctx.tenantId,
                     userId: ctx.user.id,
                     type: input.type,
                     metadata: input.metadata,
@@ -30,7 +31,7 @@ export const gamificationRouter = router({
         list: protectedProcedure.query(async ({ ctx }) => {
             const db = await getDb();
             if (!db || !ctx.user) return [];
-            return db.select().from(goals).where(eq(goals.userId, ctx.user.id));
+            return db.select().from(goals).where(and(eq(goals.tenantId, ctx.tenantId), eq(goals.userId, ctx.user.id)));
         }),
 
         create: protectedProcedure
@@ -44,7 +45,8 @@ export const gamificationRouter = router({
             .mutation(async ({ input, ctx }) => {
                 const db = await getDb();
                 if (!db || !ctx.user) return { success: false };
-                await db.insert(goals).values({ tenantId: ctx.tenantId, 
+                await db.insert(goals).values({
+                    tenantId: ctx.tenantId,
                     userId: ctx.user.id,
                     type: input.type,
                     targetAmount: input.targetAmount,
@@ -62,7 +64,7 @@ export const gamificationRouter = router({
                 if (!db) return { success: false };
                 await db.update(goals)
                     .set({ currentAmount: input.amount })
-                    .where(eq(goals.id, input.id));
+                    .where(and(eq(goals.tenantId, ctx.tenantId), eq(goals.id, input.id)));
                 return { success: true };
             }),
     }),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { workflows } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -8,7 +8,7 @@ export const workflowsRouter = router({
     list: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(workflows).orderBy(desc(workflows.createdAt));
+        return db.select().from(workflows).where(eq(workflows.tenantId, ctx.tenantId)).orderBy(desc(workflows.createdAt));
     }),
 
     get: permissionProcedure("campaigns.view")
@@ -16,7 +16,7 @@ export const workflowsRouter = router({
         .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            const result = await db.select().from(workflows).where(eq(workflows.id, input.id)).limit(1);
+            const result = await db.select().from(workflows).where(and(eq(workflows.tenantId, ctx.tenantId), eq(workflows.id, input.id))).limit(1);
             if (!result[0]) throw new Error("Workflow not found");
             return result[0];
         }),
@@ -55,7 +55,7 @@ export const workflowsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("DB error");
 
-            await db.update(workflows).set(input).where(eq(workflows.id, input.id));
+            await db.update(workflows).set(input).where(and(eq(workflows.tenantId, ctx.tenantId), eq(workflows.id, input.id)));
             return { success: true };
         }),
 
@@ -64,7 +64,7 @@ export const workflowsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.update(workflows).set({ isActive: input.isActive }).where(eq(workflows.id, input.id));
+            await db.update(workflows).set({ isActive: input.isActive }).where(and(eq(workflows.tenantId, ctx.tenantId), eq(workflows.id, input.id)));
             return { success: true };
         }),
 
@@ -73,7 +73,7 @@ export const workflowsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.delete(workflows).where(eq(workflows.id, input.id));
+            await db.delete(workflows).where(and(eq(workflows.tenantId, ctx.tenantId), eq(workflows.id, input.id)));
             return { success: true };
         }),
 });

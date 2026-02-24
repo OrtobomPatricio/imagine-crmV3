@@ -17,7 +17,7 @@ export const sessionsRouter = router({
             lastActivityAt: sessions.lastActivityAt,
             sessionToken: sessions.sessionToken,
         }).from(sessions)
-            .where(eq(sessions.userId, ctx.user.id))
+            .where(and(eq(sessions.tenantId, ctx.tenantId), eq(sessions.userId, ctx.user.id)))
             .orderBy(desc(sessions.lastActivityAt));
 
         return userSessions.map(s => ({
@@ -34,7 +34,7 @@ export const sessionsRouter = router({
         const db = await getDb();
         if (!db || !ctx.user) return { success: false };
 
-        await db.delete(sessions).where(and(eq(sessions.id, input.id), eq(sessions.userId, ctx.user.id)));
+        await db.delete(sessions).where(and(eq(sessions.tenantId, ctx.tenantId), eq(sessions.id, input.id), eq(sessions.userId, ctx.user.id)));
         return { success: true };
     }),
 
@@ -44,6 +44,7 @@ export const sessionsRouter = router({
 
         await db.delete(sessions).where(
             and(
+                eq(sessions.tenantId, ctx.tenantId),
                 eq(sessions.userId, ctx.user.id),
                 ne(sessions.sessionToken, ctx.sessionJti)
             )

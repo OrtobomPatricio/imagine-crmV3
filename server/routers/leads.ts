@@ -54,7 +54,7 @@ export const leadsRouter = router({
                 email: leads.email
             })
                 .from(leads)
-                .where(sql`(${leads.name} LIKE ${term} OR ${leads.phone} LIKE ${term})`)
+                .where(and(eq(leads.tenantId, ctx.tenantId), sql`(${leads.name} LIKE ${term} OR ${leads.phone} LIKE ${term})`))
                 .limit(input.limit);
         }),
 
@@ -68,10 +68,10 @@ export const leadsRouter = router({
             const db = await getDb();
             if (!db) return [];
 
-            let query = db.select().from(leads);
+            let query = db.select().from(leads).where(eq(leads.tenantId, ctx.tenantId));
 
             if (input?.pipelineStageId) {
-                query = query.where(eq(leads.pipelineStageId, input.pipelineStageId)) as typeof query;
+                query = db.select().from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.pipelineStageId, input.pipelineStageId))) as typeof query;
             }
 
             return query
@@ -88,7 +88,7 @@ export const leadsRouter = router({
 
             const result = await db.select()
                 .from(leads)
-                .where(eq(leads.id, input.id))
+                .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, input.id)))
                 .limit(1);
 
             return result[0] ?? null;
@@ -115,7 +115,7 @@ export const leadsRouter = router({
                 // Note: Repeatable Read isolation might prevent seeing concurrent inserts unless using stronger locking (FOR UPDATE), 
                 // but checking phone uniqueness usually relies on Unique Constraint in DB.
                 // Here we do a soft check.
-                const existingLead = await tx.select().from(leads).where(eq(leads.phone, input.phone)).limit(1);
+                const existingLead = await tx.select().from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.phone, input.phone))).limit(1);
                 if (existingLead[0]) {
                     return { id: existingLead[0].id, success: true, existed: true };
                 }
@@ -123,10 +123,10 @@ export const leadsRouter = router({
                 // Resolve pipeline stage
                 let stageId: number | null = (input.pipelineStageId as any) ?? null;
                 if (!stageId) {
-                    const p = await tx.select().from(pipelines).where(eq(pipelines.isDefault, true)).limit(1);
+                    const p = await tx.select().from(pipelines).where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.isDefault, true))).limit(1);
                     const pipeline = p[0];
                     if (pipeline) {
-                        const s = await tx.select().from(pipelineStages).where(eq(pipelineStages.pipelineId, pipeline.id)).orderBy(asc(pipelineStages.order)).limit(1);
+                        const s = await tx.select().from(pipelineStages).where(and(eq(pipelineStages.tenantId, ctx.tenantId), eq(pipelineStages.pipelineId, pipeline.id))).orderBy(asc(pipelineStages.order)).limit(1);
                         stageId = s[0]?.id ?? null;
                     }
                 }
@@ -136,12 +136,12 @@ export const leadsRouter = router({
                 // For now, standard select is "good enough" for Kanban unless high concurrency.
                 let nextOrder = 0;
                 if (stageId) {
-                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, stageId)).for('update');
+                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.pipelineStageId, stageId))).for('update');
                     nextOrder = ((maxRows[0] as any)?.max ?? 0) + 1;
                 }
 
                 // Assignment
-                const defaultNumber = await tx.select({ id: whatsappNumbers.id }).from(whatsappNumbers).limit(1);
+                const defaultNumber = await tx.select({ id: whatsappNumbers.id }).from(whatsappNumbers).where(eq(whatsappNumbers.tenantId, ctx.tenantId)).limit(1);
                 const defaultWhatsappNumberId = defaultNumber[0]?.id ?? null;
 
                 // Commission logic
@@ -150,7 +150,8 @@ export const leadsRouter = router({
                     ? COMMISSION_RATES.PANAMA
                     : COMMISSION_RATES.DEFAULT;
 
-                const result = await tx.insert(leads).values({ tenantId: ctx.tenantId, 
+                const result = await tx.insert(leads).values({
+                    tenantId: ctx.tenantId,
                     ...input,
                     email: input.email || null, // handle empty string vs null
                     value: input.value ? input.value.toString() : "0.00",
@@ -183,7 +184,7 @@ export const leadsRouter = router({
         .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            const allLeads = await db.select().from(leads);
+            const allLeads = await db.select().from(leads).where(eq(leads.tenantId, ctx.tenantId));
             const csv = leadsToCSV(allLeads);
             return { csv };
         }),
@@ -223,7 +224,7 @@ export const leadsRouter = router({
                     const userRole = (ctx.user as any).role || "agent";
                     const userCustomRole = (ctx.user as any).customRole;
                     const { getOrCreateAppSettings } = await import("../services/app-settings");
-                    const settings = await getOrCreateAppSettings(db);
+                    const settings = await getOrCreateAppSettings(db, ctx.tenantId);
                     const matrix = settings.permissionsMatrix || {};
                     const role = computeEffectiveRole({ baseRole: userRole, customRole: userCustomRole, permissionsMatrix: matrix });
 
@@ -236,7 +237,7 @@ export const leadsRouter = router({
 
                 // Handle atomic stage change and ordering
                 if (data.pipelineStageId) {
-                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, data.pipelineStageId)).for('update');
+                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.pipelineStageId, data.pipelineStageId))).for('update');
                     const nextOrder = ((maxRows[0] as any)?.max ?? 0) + 1;
                     (data as any).kanbanOrder = nextOrder;
                 }
@@ -254,10 +255,10 @@ export const leadsRouter = router({
 
                 await tx.update(leads)
                     .set(data as any)
-                    .where(eq(leads.id, id));
+                    .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, id)));
 
                 // Webhook logic
-                const updated = await tx.select({ whatsappNumberId: leads.whatsappNumberId }).from(leads).where(eq(leads.id, id)).limit(1);
+                const updated = await tx.select({ whatsappNumberId: leads.whatsappNumberId }).from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, id))).limit(1);
                 const waId = updated[0]?.whatsappNumberId as number | null | undefined;
                 if (waId) {
                     void dispatchIntegrationEvent({
@@ -281,7 +282,7 @@ export const leadsRouter = router({
             if (!db) throw new Error("Database not available");
 
             return await db.transaction(async (tx) => {
-                const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, input.pipelineStageId)).for('update');
+                const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.pipelineStageId, input.pipelineStageId))).for('update');
                 const nextOrder = ((maxRows[0] as any)?.max ?? 0) + 1;
 
                 await tx.update(leads)
@@ -290,9 +291,9 @@ export const leadsRouter = router({
                         kanbanOrder: nextOrder,
                         updatedAt: new Date()
                     } as any)
-                    .where(eq(leads.id, input.id));
+                    .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, input.id)));
 
-                const updated = await tx.select({ whatsappNumberId: leads.whatsappNumberId }).from(leads).where(eq(leads.id, input.id)).limit(1);
+                const updated = await tx.select({ whatsappNumberId: leads.whatsappNumberId }).from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, input.id))).limit(1);
                 const whatsappNumberId = updated[0]?.whatsappNumberId;
                 if (whatsappNumberId) {
                     void dispatchIntegrationEvent({
@@ -327,7 +328,7 @@ export const leadsRouter = router({
                         kanbanOrder: caseExpr,
                         updatedAt: new Date()
                     } as any)
-                    .where(inArray(leads.id, ids));
+                    .where(and(eq(leads.tenantId, ctx.tenantId), inArray(leads.id, ids)));
 
                 return { success: true, updated: ids.length } as const;
             });
@@ -338,7 +339,7 @@ export const leadsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.delete(leads).where(eq(leads.id, input.id));
+            await db.delete(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, input.id)));
             return { success: true };
         }),
 
@@ -360,16 +361,16 @@ export const leadsRouter = router({
             if (!db) return {};
 
             const pipeline = input.pipelineId
-                ? (await db.select().from(pipelines).where(eq(pipelines.id, input.pipelineId)).limit(1))[0]
-                : (await db.select().from(pipelines).where(eq(pipelines.isDefault, true)).limit(1))[0];
+                ? (await db.select().from(pipelines).where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.id, input.pipelineId))).limit(1))[0]
+                : (await db.select().from(pipelines).where(and(eq(pipelines.tenantId, ctx.tenantId), eq(pipelines.isDefault, true))).limit(1))[0];
 
             if (!pipeline) return {};
 
-            const stages = await db.select().from(pipelineStages).where(eq(pipelineStages.pipelineId, pipeline.id)).orderBy(asc(pipelineStages.order));
+            const stages = await db.select().from(pipelineStages).where(and(eq(pipelineStages.tenantId, ctx.tenantId), eq(pipelineStages.pipelineId, pipeline.id))).orderBy(asc(pipelineStages.order));
             const stageIds = stages.map(s => s.id);
 
             // Build filter conditions
-            const conditions: any[] = [inArray(leads.pipelineStageId, stageIds)];
+            const conditions: any[] = [eq(leads.tenantId, ctx.tenantId), inArray(leads.pipelineStageId, stageIds)];
             const filters = input.filters;
 
             if (filters?.search) {
@@ -403,7 +404,7 @@ export const leadsRouter = router({
                 const { leadTags } = await import("../../drizzle/schema");
                 const leadIdsWithTags = await db.select({ leadId: leadTags.leadId })
                     .from(leadTags)
-                    .where(inArray(leadTags.tagId, filters.tagIds));
+                    .where(and(eq(leadTags.tenantId, ctx.tenantId), inArray(leadTags.tagId, filters.tagIds)));
 
                 const allowedLeadIds = new Set(leadIdsWithTags.map(lt => lt.leadId));
                 leadsWithTags = filteredLeads.filter(lead => allowedLeadIds.has(lead.id));

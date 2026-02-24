@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
+import { sdk } from "../sdk";
 
 // Configuración de Rate Limit
 const RATE_MAX_REDIS = 2000;
@@ -33,19 +34,25 @@ export const rateLimitMiddleware = async (req: Request, res: Response, next: Nex
     // Lista blanca de rutas públicas
     if (req.path.startsWith("/api/whatsapp") || req.path.startsWith("/api/webhooks")) return next();
 
-    // Obtención robusta de IP (considerando proxies como Caddy/Nginx)
-    // Nota: Express 'trust proxy' debe estar configurado en app.ts para que req.ip sea correcto tras proxies.
-    // Si no, usamos x-forwarded-for manualmente como respaldo.
+    // Obtención robusta de IP
     const ip = (
         req.ip ||
         (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
         req.socket.remoteAddress ||
         "unknown"
-    ).toString().replace('::ffff:', ''); // Limpiar formato IPv6 híbrido
+    ).toString().replace('::ffff:', '');
+
+    let user = null;
+    try {
+        user = await sdk.authenticateRequest(req);
+    } catch { }
+
+    const rateKey = user ? `ratelimit:tenant:${user.tenantId}:user:${user.id}` : `ratelimit:ip:${ip}`;
+
 
     if (redis) {
         try {
-            const key = `ratelimit:${ip}`;
+            const key = rateKey;
             const count = await redis.incr(key);
             if (count === 1) await redis.expire(key, 60);
             if (count > RATE_MAX_REDIS) {
@@ -61,10 +68,10 @@ export const rateLimitMiddleware = async (req: Request, res: Response, next: Nex
 
     // Fallback / Límite en Memoria por Defecto
     const now = Date.now();
-    const bucket = buckets.get(ip);
+    const bucket = buckets.get(rateKey);
 
     if (!bucket || now > bucket.resetAt) {
-        buckets.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+        buckets.set(rateKey, { count: 1, resetAt: now + RATE_WINDOW_MS });
         return next();
     }
 

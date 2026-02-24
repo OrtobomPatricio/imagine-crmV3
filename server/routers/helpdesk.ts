@@ -9,7 +9,7 @@ export const helpdeskRouter = router({
   listQueues: permissionProcedure("helpdesk.view").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(supportQueues).orderBy(supportQueues.name);
+    return db.select().from(supportQueues).where(eq(supportQueues.tenantId, ctx.tenantId)).orderBy(supportQueues.name);
   }),
 
   createQueue: permissionProcedure("helpdesk.manage")
@@ -46,7 +46,7 @@ export const helpdeskRouter = router({
           ...(input.color ? { color: input.color } : {}),
           ...(input.greetingMessage !== undefined ? { greetingMessage: input.greetingMessage } : {}),
         })
-        .where(eq(supportQueues.id, input.id));
+        .where(and(eq(supportQueues.tenantId, ctx.tenantId), eq(supportQueues.id, input.id)));
       return { ok: true };
     }),
 
@@ -55,7 +55,7 @@ export const helpdeskRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      await db.delete(supportQueues).where(eq(supportQueues.id, input.id));
+      await db.delete(supportQueues).where(and(eq(supportQueues.tenantId, ctx.tenantId), eq(supportQueues.id, input.id)));
       return { ok: true };
     }),
 
@@ -74,7 +74,7 @@ export const helpdeskRouter = router({
       })
         .from(supportUserQueues)
         .innerJoin(users, eq(supportUserQueues.userId, users.id))
-        .where(eq(supportUserQueues.queueId, input.queueId))
+        .where(and(eq(supportUserQueues.tenantId, ctx.tenantId), eq(supportUserQueues.queueId, input.queueId)))
         .orderBy(users.name);
     }),
 
@@ -88,7 +88,7 @@ export const helpdeskRouter = router({
       if (!db) throw new Error("Database not available");
 
       // Replace membership atomically (best effort)
-      await db.delete(supportUserQueues).where(eq(supportUserQueues.queueId, input.queueId));
+      await db.delete(supportUserQueues).where(and(eq(supportUserQueues.tenantId, ctx.tenantId), eq(supportUserQueues.queueId, input.queueId)));
       if (input.userIds.length) {
         await db.insert(supportUserQueues).values(
           input.userIds.map(uid => ({
@@ -117,7 +117,7 @@ export const helpdeskRouter = router({
       const userRole = (ctx.user?.role || "viewer") as string;
       const isPrivileged = ["owner", "admin", "supervisor"].includes(userRole);
 
-      const whereParts = [];
+      const whereParts = [eq(conversations.tenantId, ctx.tenantId)];
 
       if (input.queueId) whereParts.push(eq(conversations.queueId, input.queueId));
       if (input.ticketStatus) whereParts.push(eq(conversations.ticketStatus, input.ticketStatus));
@@ -156,7 +156,7 @@ export const helpdeskRouter = router({
       if (!db) throw new Error("Database not available");
       await db.update(conversations)
         .set({ ticketStatus: input.ticketStatus })
-        .where(eq(conversations.id, input.conversationId));
+        .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
       return { ok: true };
     }),
 
@@ -174,7 +174,7 @@ export const helpdeskRouter = router({
           // Auto-open ticket if pending when assigning
           ticketStatus: sql`CASE WHEN ${conversations.ticketStatus} = 'pending' THEN 'open' ELSE ${conversations.ticketStatus} END`
         })
-        .where(eq(conversations.id, input.conversationId));
+        .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
       return { ok: true };
     }),
 
@@ -188,7 +188,7 @@ export const helpdeskRouter = router({
       if (!db) throw new Error("Database not available");
       await db.update(conversations)
         .set({ queueId: input.queueId })
-        .where(eq(conversations.id, input.conversationId));
+        .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
       return { ok: true };
     }),
 
@@ -201,10 +201,10 @@ export const helpdeskRouter = router({
       if (input?.search && input.search.trim()) {
         const q = `%${input.search.trim()}%`;
         return db.select().from(quickAnswers)
-          .where(or(like(quickAnswers.shortcut, q), like(quickAnswers.message, q)))
+          .where(and(eq(quickAnswers.tenantId, ctx.tenantId), or(like(quickAnswers.shortcut, q), like(quickAnswers.message, q))))
           .orderBy(desc(quickAnswers.updatedAt));
       }
-      return db.select().from(quickAnswers).orderBy(desc(quickAnswers.updatedAt)).limit(200);
+      return db.select().from(quickAnswers).where(eq(quickAnswers.tenantId, ctx.tenantId)).orderBy(desc(quickAnswers.updatedAt)).limit(200);
     }),
 
   upsertQuickAnswer: permissionProcedure("helpdesk.manage")
@@ -226,7 +226,7 @@ export const helpdeskRouter = router({
           shortcut: input.shortcut,
           message: input.message,
           attachments: input.attachments ?? [],
-        }).where(eq(quickAnswers.id, input.id));
+        }).where(and(eq(quickAnswers.tenantId, ctx.tenantId), eq(quickAnswers.id, input.id)));
         return { id: input.id };
       }
       const res = await db.insert(quickAnswers).values({
@@ -243,7 +243,7 @@ export const helpdeskRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      await db.delete(quickAnswers).where(eq(quickAnswers.id, input.id));
+      await db.delete(quickAnswers).where(and(eq(quickAnswers.tenantId, ctx.tenantId), eq(quickAnswers.id, input.id)));
       return { ok: true };
     }),
 });

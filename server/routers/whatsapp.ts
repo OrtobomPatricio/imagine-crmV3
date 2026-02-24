@@ -30,6 +30,7 @@ export const whatsappRouter = router({
                 })
                 .from(whatsappConnections)
                 .leftJoin(whatsappNumbers, eq(whatsappConnections.whatsappNumberId, whatsappNumbers.id))
+                .where(eq(whatsappConnections.tenantId, ctx.tenantId))
                 .orderBy(whatsappConnections.createdAt);
 
             // Merge with real-time status
@@ -64,7 +65,7 @@ export const whatsappRouter = router({
             const existingConnection = await db
                 .select()
                 .from(whatsappConnections)
-                .where(eq(whatsappConnections.phoneNumberId, input.phoneNumberId))
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.phoneNumberId, input.phoneNumberId)))
                 .limit(1);
 
             if (existingConnection.length > 0) {
@@ -75,7 +76,7 @@ export const whatsappRouter = router({
                     isConnected: true,
                     lastPingAt: new Date(),
                     updatedAt: new Date()
-                }).where(eq(whatsappConnections.id, existingConnection[0].id));
+                }).where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.id, existingConnection[0].id)));
 
                 // Update associated number
                 if (existingConnection[0].whatsappNumberId) {
@@ -86,14 +87,15 @@ export const whatsappRouter = router({
                         lastConnected: new Date(),
                         status: "active",
                         updatedAt: new Date()
-                    }).where(eq(whatsappNumbers.id, existingConnection[0].whatsappNumberId));
+                    }).where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, existingConnection[0].whatsappNumberId)));
                 }
 
                 return { success: true, id: existingConnection[0].id };
             }
 
             // Create new whatsappNumber first
-            const [newNumber] = await db.insert(whatsappNumbers).values({ tenantId: ctx.tenantId, 
+            const [newNumber] = await db.insert(whatsappNumbers).values({
+                tenantId: ctx.tenantId,
                 phoneNumber: input.phoneNumber,
                 displayName: input.displayName,
                 country: "Unknown", // Could extract from phone number
@@ -107,7 +109,8 @@ export const whatsappRouter = router({
             }).$returningId();
 
             // Create connection
-            const [newConnection] = await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
+            const [newConnection] = await db.insert(whatsappConnections).values({
+                tenantId: ctx.tenantId,
                 whatsappNumberId: newNumber.id,
                 connectionType: "api",
                 phoneNumberId: input.phoneNumberId,
@@ -130,7 +133,7 @@ export const whatsappRouter = router({
             const connection = await db
                 .select()
                 .from(whatsappConnections)
-                .where(eq(whatsappConnections.id, input.id))
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.id, input.id)))
                 .limit(1);
 
             if (connection.length === 0) {
@@ -147,12 +150,11 @@ export const whatsappRouter = router({
                 await BaileysService.disconnect(connection[0].whatsappNumberId);
             }
 
-            // Delete connection (will cascade delete conversations if configured)
-            await db.delete(whatsappConnections).where(eq(whatsappConnections.id, input.id));
+            await db.delete(whatsappConnections).where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.id, input.id)));
 
             // Delete associated whatsappNumber
             if (connection[0].whatsappNumberId) {
-                await db.delete(whatsappNumbers).where(eq(whatsappNumbers.id, connection[0].whatsappNumberId));
+                await db.delete(whatsappNumbers).where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, connection[0].whatsappNumberId)));
             }
 
             return { success: true };
@@ -166,10 +168,10 @@ export const whatsappRouter = router({
 
             await db.update(whatsappConnections)
                 .set({ isConnected: false, accessToken: null })
-                .where(eq(whatsappConnections.phoneNumberId, input.phoneNumberId));
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.phoneNumberId, input.phoneNumberId)));
 
             // Find the number ID to kill session
-            const conn = await db.select().from(whatsappConnections).where(eq(whatsappConnections.phoneNumberId, input.phoneNumberId)).limit(1);
+            const conn = await db.select().from(whatsappConnections).where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.phoneNumberId, input.phoneNumberId))).limit(1);
             if (conn.length > 0 && conn[0].whatsappNumberId) {
                 await BaileysService.disconnect(conn[0].whatsappNumberId);
             }
@@ -181,7 +183,7 @@ export const whatsappRouter = router({
         .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
-            return await db.select().from(whatsappConnections);
+            return await db.select().from(whatsappConnections).where(eq(whatsappConnections.tenantId, ctx.tenantId));
         }),
 
     listTemplates: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
@@ -189,7 +191,7 @@ export const whatsappRouter = router({
         if (!db) return [];
         // Get the first active connection with a businessAccountId
         const connection = await db.select().from(whatsappConnections)
-            .where(and(eq(whatsappConnections.isConnected, true)))
+            .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.isConnected, true)))
             .limit(1);
 
         if (!connection[0] || !connection[0].accessToken || !connection[0].businessAccountId) {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc, count, and } from "drizzle-orm";
 import { whatsappNumbers, whatsappConnections } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -12,6 +12,7 @@ export const whatsappNumbersRouter = router({
 
         return db.select()
             .from(whatsappNumbers)
+            .where(eq(whatsappNumbers.tenantId, ctx.tenantId))
             .orderBy(desc(whatsappNumbers.createdAt));
     }),
 
@@ -27,7 +28,7 @@ export const whatsappNumbersRouter = router({
             })
                 .from(whatsappNumbers)
                 .leftJoin(whatsappConnections, eq(whatsappNumbers.id, whatsappConnections.whatsappNumberId))
-                .where(eq(whatsappNumbers.id, input.id))
+                .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.id)))
                 .limit(1);
 
             const row = result[0];
@@ -51,7 +52,8 @@ export const whatsappNumbersRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const result = await db.insert(whatsappNumbers).values({ tenantId: ctx.tenantId, 
+            const result = await db.insert(whatsappNumbers).values({
+                tenantId: ctx.tenantId,
                 ...input,
                 status: 'warming_up',
                 warmupDay: 0,
@@ -73,7 +75,7 @@ export const whatsappNumbersRouter = router({
 
             await db.update(whatsappNumbers)
                 .set({ status: input.status })
-                .where(eq(whatsappNumbers.id, input.id));
+                .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.id)));
 
             return { success: true };
         }),
@@ -92,7 +94,7 @@ export const whatsappNumbersRouter = router({
                     isConnected: input.isConnected,
                     lastConnected: input.isConnected ? new Date() : undefined,
                 })
-                .where(eq(whatsappNumbers.id, input.id));
+                .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.id)));
 
             return { success: true };
         }),
@@ -103,7 +105,7 @@ export const whatsappNumbersRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            await db.delete(whatsappNumbers).where(eq(whatsappNumbers.id, input.id));
+            await db.delete(whatsappNumbers).where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.id)));
             return { success: true };
         }),
 
@@ -115,17 +117,17 @@ export const whatsappNumbersRouter = router({
             byCountry: [],
         };
 
-        const total = await db.select({ count: count() }).from(whatsappNumbers);
+        const total = await db.select({ count: count() }).from(whatsappNumbers).where(eq(whatsappNumbers.tenantId, ctx.tenantId));
 
         const byStatus = await db.select({
             status: whatsappNumbers.status,
             count: count(),
-        }).from(whatsappNumbers).groupBy(whatsappNumbers.status);
+        }).from(whatsappNumbers).where(eq(whatsappNumbers.tenantId, ctx.tenantId)).groupBy(whatsappNumbers.status);
 
         const byCountry = await db.select({
             country: whatsappNumbers.country,
             count: count(),
-        }).from(whatsappNumbers).groupBy(whatsappNumbers.country);
+        }).from(whatsappNumbers).where(eq(whatsappNumbers.tenantId, ctx.tenantId)).groupBy(whatsappNumbers.country);
 
         return {
             total: total[0]?.count ?? 0,
@@ -148,11 +150,12 @@ export const whatsappNumbersRouter = router({
             // Check if connection exists
             const existing = await db.select()
                 .from(whatsappConnections)
-                .where(eq(whatsappConnections.whatsappNumberId, input.id))
+                .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.id)))
                 .limit(1);
 
             if (existing.length === 0) {
-                await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
+                await db.insert(whatsappConnections).values({
+                    tenantId: ctx.tenantId,
                     whatsappNumberId: input.id,
                     connectionType: 'api',
                     phoneNumberId: input.phoneNumberId,
@@ -170,13 +173,13 @@ export const whatsappNumbersRouter = router({
                         isConnected: true,
                         lastPingAt: new Date(),
                     })
-                    .where(eq(whatsappConnections.whatsappNumberId, input.id));
+                    .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, input.id)));
             }
 
             // Also update number status to active if it was warming_up
             await db.update(whatsappNumbers)
                 .set({ isConnected: true })
-                .where(eq(whatsappNumbers.id, input.id));
+                .where(and(eq(whatsappNumbers.tenantId, ctx.tenantId), eq(whatsappNumbers.id, input.id)));
 
             return { success: true };
         }),

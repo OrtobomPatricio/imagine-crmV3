@@ -48,8 +48,9 @@ export async function checkSLA() {
 /**
  * Simulates an alert trigger for testing.
  */
-export async function testSLAAlert(targetEmail: string) {
+export async function testSLAAlert(targetEmail: string, tenantId: number) {
     await sendEmail({
+        tenantId,
         to: targetEmail,
         subject: "🚨 Alerta SLA: Conversación desatendida",
         html: `<p>Esta es una prueba del sistema de alertas SLA.</p>`

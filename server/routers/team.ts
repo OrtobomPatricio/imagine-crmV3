@@ -1,7 +1,7 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { users, appSettings } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -22,7 +22,7 @@ export const teamRouter = router({
             isActive: users.isActive,
             createdAt: users.createdAt,
             lastSignedIn: users.lastSignedIn,
-        }).from(users).orderBy(desc(users.createdAt));
+        }).from(users).where(eq(users.tenantId, ctx.tenantId)).orderBy(desc(users.createdAt));
     }),
 
     updateRole: permissionProcedure("users.manage")
@@ -37,16 +37,16 @@ export const teamRouter = router({
             }
 
             // Nobody can downgrade owner except owner itself
-            const target = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+            const target = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId))).limit(1);
             if (target[0]?.role === "owner" && (ctx.user as any).role !== "owner") {
                 throw new Error("Only owner can change another owner");
             }
 
-            await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
+            await db.update(users).set({ role: input.role }).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId)));
 
             // Safety check: Ensure at least one owner remains
             if (target[0]?.role === "owner" && input.role !== "owner") {
-                const ownerCount = await db.select().from(users).where(eq(users.role, "owner"));
+                const ownerCount = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.role, "owner")));
                 if (ownerCount.length === 0) {
                     // Revert if we just removed the last owner (this race condition is rare but possible)
                     // A better way is to check BEFORE update.
@@ -63,7 +63,7 @@ export const teamRouter = router({
             if (!db) throw new Error("Database not available");
 
             // Protect owner (only owner can change another owner)
-            const target = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+            const target = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId))).limit(1);
             if (target[0]?.role === "owner" && (ctx.user as any).role !== "owner") {
                 throw new Error("Only owner can change another owner");
             }
@@ -73,14 +73,14 @@ export const teamRouter = router({
 
             // Validate customRole (blocks reserved roles + checks matrix)
             if (value) {
-                const settings = await db.select().from(appSettings).limit(1);
+                const settings = await db.select().from(appSettings).where(eq(appSettings.tenantId, ctx.tenantId)).limit(1);
                 const matrix = settings[0]?.permissionsMatrix ?? {};
                 if (!Object.prototype.hasOwnProperty.call(matrix, value)) {
                     throw new Error("Role does not exist in permissions matrix");
                 }
             }
 
-            await db.update(users).set({ customRole: value }).where(eq(users.id, input.userId));
+            await db.update(users).set({ customRole: value }).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId)));
             return { success: true } as const;
         }),
 
@@ -90,12 +90,12 @@ export const teamRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const target = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+            const target = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId))).limit(1);
             if (target[0]?.role === "owner" && (ctx.user as any).role !== "owner") {
                 throw new Error("Only owner can disable owner");
             }
 
-            await db.update(users).set({ isActive: input.isActive }).where(eq(users.id, input.userId));
+            await db.update(users).set({ isActive: input.isActive }).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId)));
             return { success: true } as const;
         }),
 
@@ -111,7 +111,7 @@ export const teamRouter = router({
             if (!db) throw new Error("Database not available");
 
             // Check if email already exists
-            const existing = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+            const existing = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.email, input.email))).limit(1);
             if (existing.length > 0) {
                 throw new Error("User with this email already exists");
             }
@@ -119,7 +119,8 @@ export const teamRouter = router({
             const hashedPassword = await bcrypt.hash(input.password, 10);
             const openId = `local_${nanoid(16)}`; // Generate unique openId for local users
 
-            const result = await db.insert(users).values({ tenantId: ctx.tenantId, 
+            const result = await db.insert(users).values({
+                tenantId: ctx.tenantId,
                 openId,
                 name: input.name,
                 email: input.email,
@@ -143,7 +144,7 @@ export const teamRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const existing = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+            const existing = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.email, input.email))).limit(1);
             if (existing.length > 0) {
                 throw new Error("User already exists");
             }
@@ -153,7 +154,8 @@ export const teamRouter = router({
 
             const openId = `invite_${nanoid(16)}`;
 
-            await db.insert(users).values({ tenantId: ctx.tenantId, 
+            await db.insert(users).values({
+                tenantId: ctx.tenantId,
                 openId,
                 name: input.name,
                 email: input.email,
@@ -168,6 +170,7 @@ export const teamRouter = router({
             const inviteLink = `${baseUrl}/setup-account?token=${token}`;
 
             await sendEmail({
+                tenantId: ctx.tenantId,
                 to: input.email,
                 subject: "Welcome to Imagine CRM - Setup your account",
                 html: `
@@ -189,7 +192,7 @@ export const teamRouter = router({
             if (!db) throw new Error("Database not available");
 
             // Get target user
-            const target = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+            const target = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId))).limit(1);
             if (!target[0]) throw new Error("User not found");
 
             // Prevent deleting owner (only owner can delete owner accounts)
@@ -204,14 +207,14 @@ export const teamRouter = router({
 
             // Prevent deleting the last owner
             if (target[0].role === "owner") {
-                const owners = await db.select().from(users).where(eq(users.role, "owner"));
+                const owners = await db.select().from(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.role, "owner")));
                 if (owners.length <= 1) {
                     throw new Error("Cannot delete the last owner allowed in the system");
                 }
             }
 
             // Delete user
-            await db.delete(users).where(eq(users.id, input.userId));
+            await db.delete(users).where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, input.userId)));
             return { success: true };
         }),
 });

@@ -10,7 +10,7 @@ export const settingsRouter = router({
     get: permissionProcedure("settings.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return null;
-        const row = await getOrCreateAppSettings(db);
+        const row = await getOrCreateAppSettings(db, ctx.tenantId);
         return sanitizeAppSettings(row);
     }),
 
@@ -18,7 +18,7 @@ export const settingsRouter = router({
         .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return null;
-            const row = await getOrCreateAppSettings(db);
+            const row = await getOrCreateAppSettings(db, ctx.tenantId);
             return row.scheduling || null;
         }),
 
@@ -71,7 +71,7 @@ export const settingsRouter = router({
             if (!db) throw new Error("Database not available");
 
             // Fetch current settings for secure merge (especially for secrets)
-            const currentSettings = await getOrCreateAppSettings(db);
+            const currentSettings = await getOrCreateAppSettings(db, ctx.tenantId);
 
             let metaConfigUpdate = undefined;
             if (input.metaConfig) {
@@ -85,7 +85,7 @@ export const settingsRouter = router({
                 };
             }
 
-            await updateAppSettings(db, {
+            await updateAppSettings(db, ctx.tenantId, {
                 companyName: input.companyName,
                 logoUrl: input.logoUrl,
                 timezone: input.timezone,
@@ -110,7 +110,7 @@ export const settingsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            await updateAppSettings(db, { permissionsMatrix: input.permissionsMatrix });
+            await updateAppSettings(db, ctx.tenantId, { permissionsMatrix: input.permissionsMatrix });
             return { success: true } as const;
         }),
 
@@ -125,7 +125,7 @@ export const settingsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await updateAppSettings(db, { securityConfig: input.securityConfig });
+            await updateAppSettings(db, ctx.tenantId, { securityConfig: input.securityConfig });
             return { success: true };
         }),
 
@@ -135,10 +135,10 @@ export const settingsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             // Merge with existing config
-            const currentSettings = await getOrCreateAppSettings(db);
+            const currentSettings = await getOrCreateAppSettings(db, ctx.tenantId);
             const current = (currentSettings.dashboardConfig as Record<string, any>) || {};
 
-            await updateAppSettings(db, {
+            await updateAppSettings(db, ctx.tenantId, {
                 dashboardConfig: { ...current, ...input }
             });
 
@@ -150,10 +150,10 @@ export const settingsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            const currentSettings = await getOrCreateAppSettings(db);
+            const currentSettings = await getOrCreateAppSettings(db, ctx.tenantId);
             const current = (currentSettings.dashboardConfig as Record<string, any>) || {};
 
-            await updateAppSettings(db, {
+            await updateAppSettings(db, ctx.tenantId, {
                 dashboardConfig: { ...current, layout: input.layout }
             });
 
@@ -173,7 +173,7 @@ export const settingsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const currentSettings = await getOrCreateAppSettings(db);
+            const currentSettings = await getOrCreateAppSettings(db, ctx.tenantId);
             const prev = (currentSettings.smtpConfig as Record<string, any>) ?? {};
 
             const next = {
@@ -187,7 +187,7 @@ export const settingsRouter = router({
                 ...(input.pass === null ? { pass: null } : {}),
             };
 
-            await updateAppSettings(db, { smtpConfig: next });
+            await updateAppSettings(db, ctx.tenantId, { smtpConfig: next });
             return { success: true };
         }),
 
@@ -205,7 +205,7 @@ export const settingsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const currentSettings = await getOrCreateAppSettings(db);
+            const currentSettings = await getOrCreateAppSettings(db, ctx.tenantId);
             const prev = (currentSettings.storageConfig as Record<string, any>) ?? {};
 
             const next = {
@@ -221,7 +221,7 @@ export const settingsRouter = router({
                 ...(input.secretKey === null ? { secretKey: null } : {}),
             };
 
-            await updateAppSettings(db, { storageConfig: next });
+            await updateAppSettings(db, ctx.tenantId, { storageConfig: next });
             return { success: true };
         }),
 
@@ -235,7 +235,7 @@ export const settingsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const currentSettings = await getOrCreateAppSettings(db);
+            const currentSettings = await getOrCreateAppSettings(db, ctx.tenantId);
             const prev = (currentSettings.aiConfig as Record<string, any>) ?? {};
 
             const next = {
@@ -246,7 +246,7 @@ export const settingsRouter = router({
                 ...(input.apiKey === null ? { apiKey: null } : {}),
             };
 
-            await updateAppSettings(db, { aiConfig: next });
+            await updateAppSettings(db, ctx.tenantId, { aiConfig: next });
             return { success: true };
         }),
 
@@ -258,7 +258,7 @@ export const settingsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const currentSettings = await getOrCreateAppSettings(db);
+            const currentSettings = await getOrCreateAppSettings(db, ctx.tenantId);
             const prev = (currentSettings.mapsConfig as Record<string, any>) ?? {};
 
             const next = {
@@ -267,7 +267,7 @@ export const settingsRouter = router({
                 ...(input.apiKey === null ? { apiKey: null } : {}),
             };
 
-            await updateAppSettings(db, { mapsConfig: next });
+            await updateAppSettings(db, ctx.tenantId, { mapsConfig: next });
             return { success: true };
         }),
 
@@ -276,7 +276,9 @@ export const settingsRouter = router({
         // Ensure we don't break if no db or user
         if (!db || !ctx.user) return { role: ctx.user?.role ?? "agent", baseRole: ctx.user?.role ?? "agent", permissions: [] };
 
-        const matrix = (await getOrCreateAppSettings(db)).permissionsMatrix ?? {};
+        // Use context tenant if available, throw if missing for safety
+        if (!ctx.tenantId) throw new Error("Missing tenantId");
+        const matrix = (await getOrCreateAppSettings(db, ctx.tenantId)).permissionsMatrix ?? {};
         const baseRole = (ctx.user as any).role ?? "agent";
         const customRole = (ctx.user as any).customRole as string | undefined;
 

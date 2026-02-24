@@ -24,7 +24,7 @@ export const chatRouter = router({
             // 1. Try to find existing conversation by leadId
             const existing = await db.select()
                 .from(conversations)
-                .where(eq(conversations.leadId, input.leadId))
+                .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.leadId, input.leadId)))
                 .limit(1);
 
             if (existing[0]) {
@@ -34,26 +34,26 @@ export const chatRouter = router({
             // 2. Fetch lead to get phone number
             const { leads } = await import("../../drizzle/schema"); // Lazy load schema circular dependency? No, leads is in schema
             // But we need to import leads table.
-            const lead = await db.select().from(leads).where(eq(leads.id, input.leadId)).limit(1);
+            const lead = await db.select().from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, input.leadId))).limit(1);
             if (!lead[0]) throw new Error("Lead not found");
 
             // 3. Try to find conversation by phone (in case it wasn't linked yet)
             const byPhone = await db.select()
                 .from(conversations)
-                .where(eq(conversations.contactPhone, lead[0].phone))
+                .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.contactPhone, lead[0].phone)))
                 .limit(1);
 
             if (byPhone[0]) {
                 // Link it to the lead
                 await db.update(conversations)
                     .set({ leadId: input.leadId, contactName: lead[0].name })
-                    .where(eq(conversations.id, byPhone[0].id));
+                    .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, byPhone[0].id)));
                 return { ...byPhone[0], leadId: input.leadId };
             }
 
             // 4. Create new conversation
             // We need a default whatsapp channel. For now picking the first connected one or null if none.
-            const channels = await db.select().from(whatsappConnections).where(eq(whatsappConnections.isConnected, true)).limit(1);
+            const channels = await db.select().from(whatsappConnections).where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.isConnected, true))).limit(1);
             const defaultChannelId = channels[0]?.whatsappNumberId;
             const defaultConnType = (channels[0]?.connectionType as any) ?? "api";
 
@@ -95,7 +95,7 @@ export const chatRouter = router({
         .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
-            const res = await db.select().from(conversations).where(eq(conversations.id, input.id)).limit(1);
+            const res = await db.select().from(conversations).where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.id))).limit(1);
             return res[0] || null;
         }),
 
@@ -116,7 +116,10 @@ export const chatRouter = router({
                 const db = await getDb();
                 if (!db) return [];
 
-                let whereClause = input?.whatsappNumberId ? eq(conversations.whatsappNumberId, input.whatsappNumberId) : undefined;
+                let whereClause: any = eq(conversations.tenantId, ctx.tenantId);
+                if (input?.whatsappNumberId) {
+                    whereClause = and(whereClause, eq(conversations.whatsappNumberId, input.whatsappNumberId));
+                }
 
                 // Privacy Filter: Agents only see their assigned chats
                 const userRole = (ctx.user?.role || "viewer") as string;
@@ -196,7 +199,7 @@ export const chatRouter = router({
                         mediaName: chatMessages.mediaName,
                     })
                     .from(chatMessages)
-                    .where(inArray(chatMessages.conversationId, convIds))
+                    .where(and(eq(chatMessages.tenantId, ctx.tenantId), inArray(chatMessages.conversationId, convIds)))
                     .orderBy(desc(chatMessages.id));
 
                 // Map last messages to conversations
@@ -233,7 +236,7 @@ export const chatRouter = router({
             const db = await getDb();
             if (!db) return [];
 
-            let whereClause: any = eq(chatMessages.conversationId, input.conversationId);
+            let whereClause: any = and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.conversationId, input.conversationId));
             if (input.cursor) {
                 whereClause = and(whereClause, lt(chatMessages.id, input.cursor));
             }
@@ -290,9 +293,10 @@ export const chatRouter = router({
             const userRole = (ctx.user?.role || "viewer") as string;
             const isPrivileged = ["owner", "admin", "supervisor"].includes(userRole);
 
-            let whereClause = input.whatsappNumberId
-                ? eq(chatMessages.whatsappNumberId, input.whatsappNumberId)
-                : undefined;
+            let whereClause: any = eq(chatMessages.tenantId, ctx.tenantId);
+            if (input.whatsappNumberId) {
+                whereClause = and(whereClause, eq(chatMessages.whatsappNumberId, input.whatsappNumberId));
+            }
 
             if (!isPrivileged && ctx.user && userRole === "agent") {
                 const assignedFilter = eq(conversations.assignedToId, ctx.user.id);
@@ -323,6 +327,7 @@ export const chatRouter = router({
             await db.update(chatMessages)
                 .set({ status: 'read', readAt: new Date() })
                 .where(and(
+                    eq(chatMessages.tenantId, ctx.tenantId),
                     eq(chatMessages.conversationId, input.conversationId),
                     eq(chatMessages.direction, 'inbound'),
                     eq(chatMessages.status, 'delivered') // or pending
@@ -331,15 +336,15 @@ export const chatRouter = router({
             // Reset unread count
             await db.update(conversations)
                 .set({ unreadCount: 0 })
-                .where(eq(conversations.id, input.conversationId));
+                .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
 
             // Attempt to send Read Receipt to WhatsApp (Baileys)
             try {
                 // Determine channel
-                const conv = await db.select().from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
+                const conv = await db.select().from(conversations).where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId))).limit(1);
                 if (conv[0] && conv[0].channel === 'whatsapp' && conv[0].whatsappNumberId) {
                     const { whatsappConnections } = await import("../../drizzle/schema"); // Lazy load
-                    const conn = await db.select().from(whatsappConnections).where(eq(whatsappConnections.whatsappNumberId, conv[0].whatsappNumberId)).limit(1);
+                    const conn = await db.select().from(whatsappConnections).where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, conv[0].whatsappNumberId))).limit(1);
 
                     if (conn[0] && conn[0].connectionType === 'qr' && conn[0].isConnected) {
                         // Fetch unread delivered messages to mark as read remotely
@@ -348,6 +353,7 @@ export const chatRouter = router({
                         const unreadMsgs = await db.select({ whatsappMessageId: chatMessages.whatsappMessageId })
                             .from(chatMessages)
                             .where(and(
+                                eq(chatMessages.tenantId, ctx.tenantId),
                                 eq(chatMessages.conversationId, input.conversationId),
                                 eq(chatMessages.direction, 'inbound'),
                                 sql`${chatMessages.whatsappMessageId} IS NOT NULL`
@@ -378,7 +384,7 @@ export const chatRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.update(conversations).set({ status: input.status }).where(eq(conversations.id, input.conversationId));
+            await db.update(conversations).set({ status: input.status }).where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
             return { success: true };
         }),
 
@@ -387,7 +393,7 @@ export const chatRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.delete(conversations).where(eq(conversations.id, input.conversationId));
+            await db.delete(conversations).where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
             return { success: true };
         }),
 
@@ -396,7 +402,7 @@ export const chatRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.update(conversations).set({ assignedToId: input.assignedToId }).where(eq(conversations.id, input.conversationId));
+            await db.update(conversations).set({ assignedToId: input.assignedToId }).where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
             return { success: true };
         }),
 
@@ -429,7 +435,7 @@ export const chatRouter = router({
             // Lookup conversation to determine channel
             const convRows = await db.select()
                 .from(conversations)
-                .where(eq(conversations.id, input.conversationId))
+                .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)))
                 .limit(1);
             const conv = convRows[0];
             if (!conv) throw new Error("Conversation not found");
@@ -462,7 +468,7 @@ export const chatRouter = router({
                     lastMessageAt: now,
                     ticketStatus: sql`CASE WHEN ${conversations.ticketStatus} = 'pending' THEN 'open' ELSE ${conversations.ticketStatus} END`
                 })
-                .where(eq(conversations.id, input.conversationId));
+                .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, input.conversationId)));
 
             // Emit WebSocket event for real-time updates
             console.log(`[WebSocket] Emitting message:new for conversation ${input.conversationId}, message ${id}`);
@@ -480,7 +486,7 @@ export const chatRouter = router({
                 if (!pageId) throw new Error("Falta facebookPageId");
 
                 // Get Page Access Token
-                const pageRows = await db.select().from(facebookPages).where(eq(facebookPages.id, pageId)).limit(1);
+                const pageRows = await db.select().from(facebookPages).where(and(eq(facebookPages.tenantId, ctx.tenantId), eq(facebookPages.id, pageId))).limit(1);
                 const page = pageRows[0];
 
                 if (!page || !page.accessToken) throw new Error("Página de Facebook no conectada o sin token");
@@ -520,13 +526,13 @@ export const chatRouter = router({
                             facebookMessageId: res.messageId,
                             sentAt: now,
                         })
-                        .where(eq(chatMessages.id, id));
+                        .where(and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.id, id)));
 
                     return { id, success: true, sent: true };
                 } catch (err: any) {
                     await db.update(chatMessages)
                         .set({ status: 'failed', errorMessage: err.message, failedAt: now })
-                        .where(eq(chatMessages.id, id));
+                        .where(and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.id, id)));
                     throw err;
                 }
             } else {
@@ -535,21 +541,21 @@ export const chatRouter = router({
                 if (!whatsappNumberId) {
                     await db.update(chatMessages)
                         .set({ status: 'failed', errorMessage: "Falta whatsappNumberId", failedAt: now })
-                        .where(eq(chatMessages.id, id));
+                        .where(and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.id, id)));
                     throw new Error("Falta whatsappNumberId");
                 }
 
                 // Lookup WhatsApp connection
                 const connRows = await db.select()
                     .from(whatsappConnections)
-                    .where(eq(whatsappConnections.whatsappNumberId, whatsappNumberId))
+                    .where(and(eq(whatsappConnections.tenantId, ctx.tenantId), eq(whatsappConnections.whatsappNumberId, whatsappNumberId)))
                     .limit(1);
                 const conn = connRows[0];
 
                 if (!conn) {
                     await db.update(chatMessages)
                         .set({ status: 'failed', errorMessage: "WhatsApp no configurado", failedAt: now })
-                        .where(eq(chatMessages.id, id));
+                        .where(and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.id, id)));
                     throw new Error("WhatsApp no configurado para este número");
                 }
 
@@ -557,7 +563,7 @@ export const chatRouter = router({
                 if (!conv.whatsappConnectionType && conn.connectionType) {
                     await db.update(conversations)
                         .set({ whatsappConnectionType: conn.connectionType as any })
-                        .where(eq(conversations.id, conv.id));
+                        .where(and(eq(conversations.tenantId, ctx.tenantId), eq(conversations.id, conv.id)));
                 }
 
                 // Send based on connection type
@@ -607,7 +613,7 @@ export const chatRouter = router({
                                 whatsappMessageId: result?.key?.id || null,
                                 sentAt: now,
                             })
-                            .where(eq(chatMessages.id, id));
+                            .where(and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.id, id)));
 
                         return { id, success: true, sent: true, via: 'baileys' };
 
@@ -633,7 +639,7 @@ export const chatRouter = router({
                                 whatsappMessageId: result.messageId,
                                 sentAt: now,
                             })
-                            .where(eq(chatMessages.id, id));
+                            .where(and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.id, id)));
 
                         return { id, success: true, sent: true, via: 'cloud-api' };
                     } else {
@@ -642,7 +648,7 @@ export const chatRouter = router({
                 } catch (err: any) {
                     await db.update(chatMessages)
                         .set({ status: 'failed', errorMessage: err.message, failedAt: now })
-                        .where(eq(chatMessages.id, id));
+                        .where(and(eq(chatMessages.tenantId, ctx.tenantId), eq(chatMessages.id, id)));
                     throw err;
                 }
             }

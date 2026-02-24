@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and } from "drizzle-orm";
 import { customFieldDefinitions } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -8,7 +8,9 @@ export const customFieldsRouter = router({
     list: permissionProcedure("leads.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(customFieldDefinitions).orderBy(asc(customFieldDefinitions.order));
+        return db.select().from(customFieldDefinitions)
+            .where(eq(customFieldDefinitions.tenantId, ctx.tenantId))
+            .orderBy(asc(customFieldDefinitions.order));
     }),
 
     create: permissionProcedure("settings.manage")
@@ -38,7 +40,7 @@ export const customFieldsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             const { id, ...data } = input;
-            await db.update(customFieldDefinitions).set(data).where(eq(customFieldDefinitions.id, id));
+            await db.update(customFieldDefinitions).set(data).where(and(eq(customFieldDefinitions.tenantId, ctx.tenantId), eq(customFieldDefinitions.id, id)));
             return { success: true };
         }),
 
@@ -47,7 +49,7 @@ export const customFieldsRouter = router({
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.id, input.id));
+            await db.delete(customFieldDefinitions).where(and(eq(customFieldDefinitions.tenantId, ctx.tenantId), eq(customFieldDefinitions.id, input.id)));
             return { success: true };
         }),
 });
