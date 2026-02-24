@@ -39,7 +39,7 @@ export function ChatActionsMenu({ conversationId, currentAssignedId }: ChatActio
 
     const statusMutation = trpc.chat.updateStatus.useMutation({
         onSuccess: (data, variables) => {
-            const action = variables.status === 'blocked' ? "bloqueado" : "archivado";
+            const action = (variables as any)?.status === 'blocked' ? "bloqueado" : "archivado";
             toast.success(`Chat ${action} correctamente`);
             utils.chat.getById.invalidate({ id: conversationId });
             utils.chat.listConversations.invalidate();

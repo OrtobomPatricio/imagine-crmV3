@@ -62,6 +62,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   try {
     const values: InsertUser = {
+      tenantId: user.tenantId ?? 1,
       openId: user.openId,
     };
     const updateSet: Record<string, unknown> = {};

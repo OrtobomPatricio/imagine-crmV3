@@ -170,7 +170,7 @@ export function ChatLeadDetails({ leadId, className }: ChatLeadDetailsProps) {
                                 <Tag className="h-3 w-3" /> Etiquetas
                             </Label>
                             <TagSelector
-                                selectedTags={leadTags}
+                                selectedTags={leadTags.map(t => ({ id: t.tagId, name: t.name, color: t.color }))}
                                 onChange={handleTagsChange}
                             />
                         </div>
@@ -240,7 +240,7 @@ export function ChatLeadDetails({ leadId, className }: ChatLeadDetailsProps) {
                                     className="h-8 text-xs"
                                 />
                             </div>
-                            
+
                             <div className="space-y-1.5 col-span-2">
                                 <Label className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
                                     <MapPin className="h-3 w-3" /> País

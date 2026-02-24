@@ -23,6 +23,7 @@ export function registerOAuthRoutes(app: Express) {
       if (!openId) return res.status(500).json({ error: "OWNER_OPEN_ID missing" });
 
       await db.upsertUser({
+        tenantId: 1,
         openId,
         name: "Dev User",
         email: null,
@@ -57,6 +58,7 @@ export function registerOAuthRoutes(app: Express) {
       }
 
       await db.upsertUser({
+        tenantId: 1,
         openId: userInfo.openId,
         name: userInfo.name || null,
         email: userInfo.email ?? null,

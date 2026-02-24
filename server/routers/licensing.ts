@@ -9,7 +9,7 @@ export const licensingRouter = router({
     /**
      * Get current license status and usage
      */
-    getStatus: permissionProcedure("settings.view").query(async () => {
+    getStatus: permissionProcedure("settings.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) {
             return {
@@ -105,7 +105,7 @@ export const licensingRouter = router({
             maxMessagesPerMonth: z.number().optional(),
             features: z.array(z.string()).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -121,6 +121,7 @@ export const licensingRouter = router({
             } else {
                 if (!input.key) throw new Error("License key is required");
                 await db.insert(license).values({
+                    tenantId: ctx.tenantId,
                     key: input.key,
                     status: input.status || 'trial',
                     plan: input.plan || 'starter',
@@ -141,7 +142,7 @@ export const licensingRouter = router({
      */
     getUsageHistory: permissionProcedure("settings.view")
         .input(z.object({ months: z.number().default(6) }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -161,7 +162,7 @@ export const licensingRouter = router({
             messagesSent: z.number().optional(),
             messagesReceived: z.number().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return;
 
@@ -186,6 +187,7 @@ export const licensingRouter = router({
                     .where(eq(usageTracking.id, existing.id));
             } else {
                 await db.insert(usageTracking).values({
+                    tenantId: 1,
                     year,
                     month,
                     messagesSent: input.messagesSent || 0,
@@ -207,7 +209,7 @@ export async function checkLicenseLimit(
     if (!db) return { allowed: true }; // Allow if no DB (dev mode)
 
     const [lic] = await db.select().from(license).limit(1);
-    
+
     if (!lic || lic.status === 'expired' || lic.status === 'canceled') {
         return { allowed: false, reason: "Licencia expirada o cancelada" };
     }
@@ -219,9 +221,9 @@ export async function checkLicenseLimit(
     };
 
     if (currentCount >= limits[limitType]) {
-        return { 
-            allowed: false, 
-            reason: `Límite de ${limitType} alcanzado (${limits[limitType]}). Actualiza tu plan.` 
+        return {
+            allowed: false,
+            reason: `Límite de ${limitType} alcanzado (${limits[limitType]}). Actualiza tu plan.`
         };
     }
 
@@ -238,7 +240,7 @@ export function requireLicense(limitType: 'users' | 'whatsappNumbers' | 'message
 
         // Get current count based on limit type
         let currentCount = 0;
-        
+
         switch (limitType) {
             case 'users':
                 const userCount = await db.select({ count: sql<number>`count(*)` })

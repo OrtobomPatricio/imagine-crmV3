@@ -1,0 +1,5 @@
+﻿client/src/components/notes-tasks/LeadReminders.tsx(91,5): error TS2304: Cannot find name 'useEffect'.
+client/src/components/tags/TagSelector.tsx(149,68): error TS2345: Argument of type '{ id?: number; name?: string; color?: string; createdAt?: string; tenantId?: number; description?: string; }' is not assignable to parameter of type 'Tag'.
+  Property 'id' is optional in type '{ id?: number; name?: string; color?: string; createdAt?: string; tenantId?: number; description?: string; }' but required in type 'Tag'.
+client/src/main.tsx(76,7): error TS2322: Type 'typeof SuperJSON' is not assignable to type 'TypeError<"You must define a transformer on your your `initTRPC`-object first">'.
+  Type 'typeof SuperJSON' is not assignable to type '"You must define a transformer on your your `initTRPC`-object first"'.

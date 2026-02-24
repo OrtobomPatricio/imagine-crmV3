@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
 
 export const campaignsRouter = router({
-    list: permissionProcedure("campaigns.view").query(async () => {
+    list: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
         return db.select().from(campaigns).orderBy(desc(campaigns.createdAt));
@@ -19,10 +19,10 @@ export const campaignsRouter = router({
             message: z.string(), // Fallback or override
             audienceConfig: z.any().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            const result = await db.insert(campaigns).values({
+            const result = await db.insert(campaigns).values({ tenantId: ctx.tenantId, 
                 ...input,
                 status: "draft",
             });
@@ -35,7 +35,7 @@ export const campaignsRouter = router({
             tags: z.array(z.string()).optional(),
             // Add more filters as needed
         }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return { count: 0 };
 
@@ -53,7 +53,7 @@ export const campaignsRouter = router({
 
     launch: permissionProcedure("campaigns.manage")
         .input(z.object({ campaignId: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
 
@@ -93,7 +93,7 @@ export const campaignsRouter = router({
             let insertedCount = 0;
             for (const lead of audience) {
                 try {
-                    await db.insert(campaignRecipients).values({
+                    await db.insert(campaignRecipients).values({ tenantId: ctx.tenantId, 
                         campaignId: input.campaignId,
                         leadId: lead.id,
                         status: "pending",
@@ -120,7 +120,7 @@ export const campaignsRouter = router({
 
     getById: permissionProcedure("campaigns.view")
         .input(z.object({ id: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
 
@@ -134,7 +134,7 @@ export const campaignsRouter = router({
 
     delete: permissionProcedure("campaigns.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 

@@ -210,6 +210,7 @@ class SDKServer {
         const u = await database.select().from(users).where(eq(users.openId, payload.openId)).limit(1);
         if (u[0]) {
           await database.insert(sessions).values({
+            tenantId: 1,
             userId: u[0].id,
             sessionToken: jti, // Guardamos el JTI, no el token entero (seguridad)
             ipAddress: options.ipAddress ?? null,
@@ -333,6 +334,7 @@ class SDKServer {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
         await db.upsertUser({
+          tenantId: 1,
           openId: userInfo.openId,
           name: userInfo.name || null,
           email: userInfo.email ?? null,
@@ -355,6 +357,7 @@ class SDKServer {
     }
 
     await db.upsertUser({
+      tenantId: 1,
       openId: user.openId,
       lastSignedIn: signedInAt,
     });

@@ -8,7 +8,7 @@ import { permissionProcedure, router } from "../_core/trpc";
 import { sendEmail } from "../_core/email";
 
 export const teamRouter = router({
-    listUsers: permissionProcedure("users.view").query(async () => {
+    listUsers: permissionProcedure("users.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
 
@@ -119,7 +119,7 @@ export const teamRouter = router({
             const hashedPassword = await bcrypt.hash(input.password, 10);
             const openId = `local_${nanoid(16)}`; // Generate unique openId for local users
 
-            const result = await db.insert(users).values({
+            const result = await db.insert(users).values({ tenantId: ctx.tenantId, 
                 openId,
                 name: input.name,
                 email: input.email,
@@ -153,7 +153,7 @@ export const teamRouter = router({
 
             const openId = `invite_${nanoid(16)}`;
 
-            await db.insert(users).values({
+            await db.insert(users).values({ tenantId: ctx.tenantId, 
                 openId,
                 name: input.name,
                 email: input.email,

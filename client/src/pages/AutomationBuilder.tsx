@@ -55,7 +55,7 @@ export default function AutomationBuilder() {
     // Actually, App.tsx renders: <Route path="/automations/:id" component={AutomationBuilder} />
     // usage of useRoute for parameters:
     const [match, paramsRoute] = useRoute("/automations/:id");
-    const id = match ? paramsRoute.id : null;
+    const id = match && paramsRoute ? (paramsRoute as any).id : null;
 
     const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState({

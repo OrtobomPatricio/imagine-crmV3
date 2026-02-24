@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
 
 export const pipelinesRouter = router({
-    list: permissionProcedure("kanban.view").query(async () => {
+    list: permissionProcedure("kanban.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
 
@@ -14,6 +14,7 @@ export const pipelinesRouter = router({
         // Auto-create default pipeline if none exists
         if (allPipelines.length === 0) {
             const result = await db.insert(pipelines).values({
+                tenantId: ctx.tenantId,
                 name: "Pipeline por defecto",
                 isDefault: true,
             });
@@ -31,6 +32,7 @@ export const pipelinesRouter = router({
 
             for (const s of defaults) {
                 await db.insert(pipelineStages).values({
+                    tenantId: ctx.tenantId,
                     pipelineId,
                     name: s.name,
                     color: s.color,
@@ -52,11 +54,11 @@ export const pipelinesRouter = router({
 
     create: permissionProcedure("kanban.manage")
         .input(z.object({ name: z.string().min(1) }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const result = await db.insert(pipelines).values({ name: input.name });
+            const result = await db.insert(pipelines).values({ tenantId: ctx.tenantId, name: input.name });
             const pipelineId = result[0].insertId;
 
             // Add default stages for new pipelines too? Or empty? Let's add standard ones
@@ -69,6 +71,7 @@ export const pipelinesRouter = router({
 
             for (const s of defaults) {
                 await db.insert(pipelineStages).values({
+                    tenantId: ctx.tenantId,
                     pipelineId,
                     name: s.name,
                     color: s.color,
@@ -87,7 +90,7 @@ export const pipelinesRouter = router({
             color: z.string().optional(),
             order: z.number().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
             await db.update(pipelineStages).set(input).where(eq(pipelineStages.id, input.id));
@@ -102,16 +105,16 @@ export const pipelinesRouter = router({
             order: z.number().default(0),
             type: z.enum(["open", "won", "lost"]).default("open"),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
-            await db.insert(pipelineStages).values(input);
+            await db.insert(pipelineStages).values({ tenantId: ctx.tenantId, ...input });
             return { success: true };
         }),
 
     deleteStage: permissionProcedure("kanban.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
 
@@ -126,7 +129,7 @@ export const pipelinesRouter = router({
             pipelineId: z.number(),
             orderedStageIds: z.array(z.number()),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
 

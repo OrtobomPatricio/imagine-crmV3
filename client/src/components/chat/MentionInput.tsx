@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import React from "react";
 
 interface MentionInputProps {
     value: string;
@@ -34,7 +35,7 @@ export function MentionInput({
     const [cursorPosition, setCursorPosition] = useState(0);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const filteredUsers = users.filter((u: any) => 
+    const filteredUsers = users.filter((u: any) =>
         u.isActive && u.name.toLowerCase().includes(mentionQuery.toLowerCase())
     ).slice(0, 5);
 
@@ -64,11 +65,11 @@ export function MentionInput({
         const beforeMention = value.slice(0, cursorPosition).replace(/@\w*$/, "");
         const afterMention = value.slice(cursorPosition);
         const mentionText = `@${user.name} `;
-        
+
         const newValue = beforeMention + mentionText + afterMention;
         onChange(newValue);
         setShowMentions(false);
-        
+
         // Focus and set cursor after mention
         setTimeout(() => {
             textarea.focus();
@@ -90,7 +91,7 @@ export function MentionInput({
         switch (e.key) {
             case "ArrowDown":
                 e.preventDefault();
-                setSelectedIndex((prev) => 
+                setSelectedIndex((prev) =>
                     prev < filteredUsers.length - 1 ? prev + 1 : prev
                 );
                 break;
@@ -102,7 +103,7 @@ export function MentionInput({
             case "Tab":
                 e.preventDefault();
                 if (filteredUsers[selectedIndex]) {
-                    insertMention(filteredUsers[selectedIndex]);
+                    insertMention(filteredUsers[selectedIndex] as any as MentionUser);
                 }
                 break;
             case "Escape":
@@ -132,10 +133,10 @@ export function MentionInput({
                 className={cn("min-h-[80px] resize-none", className)}
                 disabled={disabled}
             />
-            
+
             {/* Mention suggestions popup */}
             {showMentions && filteredUsers.length > 0 && (
-                <div 
+                <div
                     className="absolute bottom-full left-0 mb-1 w-64 bg-popover border rounded-md shadow-lg py-1 z-50"
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -171,9 +172,9 @@ export function MentionInput({
 }
 
 // Parse mentions in text and render them with highlights
-export function renderMentions(text: string, users: { id: number; name: string }[]) {
+export function renderMentions(text: string, users: { id: number; name: string }[]): React.ReactNode[] {
     const mentionRegex = /@(\w+(?:\s+\w+)*)/g;
-    const parts: (string | JSX.Element)[] = [];
+    const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match;
 
@@ -184,14 +185,14 @@ export function renderMentions(text: string, users: { id: number; name: string }
         }
 
         const mentionName = match[1];
-        const mentionedUser = users.find(u => 
+        const mentionedUser = users.find(u =>
             u.name.toLowerCase() === mentionName.toLowerCase()
         );
 
         if (mentionedUser) {
             parts.push(
-                <span 
-                    key={match.index} 
+                <span
+                    key={match.index}
                     className="text-primary font-medium bg-primary/10 px-1 rounded"
                 >
                     @{mentionName}

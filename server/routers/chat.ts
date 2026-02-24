@@ -60,6 +60,7 @@ export const chatRouter = router({
             if (!defaultChannelId) throw new Error("No active WhatsApp channel found to start conversation");
 
             const result = await db.insert(conversations).values({
+                tenantId: ctx.tenantId,
                 channel: 'whatsapp',
                 whatsappNumberId: defaultChannelId,
                 whatsappConnectionType: defaultConnType,
@@ -91,7 +92,7 @@ export const chatRouter = router({
 
     getById: permissionProcedure("chat.view")
         .input(z.object({ id: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
             const res = await db.select().from(conversations).where(eq(conversations.id, input.id)).limit(1);
@@ -112,108 +113,108 @@ export const chatRouter = router({
         )
         .query(async ({ input, ctx }) => {
             try {
-            const db = await getDb();
-            if (!db) return [];
+                const db = await getDb();
+                if (!db) return [];
 
-            let whereClause = input?.whatsappNumberId ? eq(conversations.whatsappNumberId, input.whatsappNumberId) : undefined;
+                let whereClause = input?.whatsappNumberId ? eq(conversations.whatsappNumberId, input.whatsappNumberId) : undefined;
 
-            // Privacy Filter: Agents only see their assigned chats
-            const userRole = (ctx.user?.role || "viewer") as string;
-            const isPrivileged = ["owner", "admin", "supervisor"].includes(userRole);
+                // Privacy Filter: Agents only see their assigned chats
+                const userRole = (ctx.user?.role || "viewer") as string;
+                const isPrivileged = ["owner", "admin", "supervisor"].includes(userRole);
 
-            if (!isPrivileged && ctx.user && userRole === "agent") {
-                const assignedFilter = eq(conversations.assignedToId, ctx.user.id);
-                whereClause = whereClause ? and(whereClause, assignedFilter) : assignedFilter;
-            }
-
-            // Optional filters
-            if (input?.assignedToMe && ctx.user?.id) {
-                const f = eq(conversations.assignedToId, ctx.user.id);
-                whereClause = whereClause ? and(whereClause, f) : f;
-            }
-
-            if (input?.unreadOnly) {
-                const f = gt(conversations.unreadCount, 0);
-                whereClause = whereClause ? and(whereClause, f) : f;
-            }
-
-            const q = input?.search?.trim();
-            if (q) {
-                const needle = `%${q}%`;
-                const f = or(like(conversations.contactName, needle), like(conversations.contactPhone, needle));
-                whereClause = whereClause ? and(whereClause, f) : f;
-            }
-
-            // Build base query without subqueries for better compatibility
-            let query = db
-                .select({
-                    id: conversations.id,
-                    channel: conversations.channel,
-                    whatsappNumberId: conversations.whatsappNumberId,
-                    whatsappConnectionType: conversations.whatsappConnectionType,
-                    externalChatId: conversations.externalChatId,
-                    facebookPageId: conversations.facebookPageId,
-                    contactPhone: conversations.contactPhone,
-                    contactName: conversations.contactName,
-                    leadId: conversations.leadId,
-                    assignedToId: conversations.assignedToId,
-                    ticketStatus: conversations.ticketStatus,
-                    queueId: conversations.queueId,
-                    lastMessageAt: conversations.lastMessageAt,
-                    unreadCount: conversations.unreadCount,
-                    status: conversations.status,
-                    createdAt: conversations.createdAt,
-                    updatedAt: conversations.updatedAt,
-                })
-                .from(conversations);
-
-            if (whereClause) {
-                query = query.where(whereClause) as typeof query;
-            }
-
-            const sort = input?.sort || "recent";
-            if (sort === "oldest") {
-                query = query.orderBy(asc(conversations.lastMessageAt)) as typeof query;
-            } else if (sort === "unread") {
-                query = query.orderBy(desc(conversations.unreadCount), desc(conversations.lastMessageAt)) as typeof query;
-            } else {
-                query = query.orderBy(desc(conversations.lastMessageAt)) as typeof query;
-            }
-
-            const convs = await query;
-
-            // Get last message info for each conversation in a single query
-            if (convs.length === 0) return [];
-
-            const convIds = convs.map(c => c.id);
-            const lastMessages = await db
-                .select({
-                    conversationId: chatMessages.conversationId,
-                    content: chatMessages.content,
-                    direction: chatMessages.direction,
-                    messageType: chatMessages.messageType,
-                    mediaName: chatMessages.mediaName,
-                })
-                .from(chatMessages)
-                .where(inArray(chatMessages.conversationId, convIds))
-                .orderBy(desc(chatMessages.id));
-
-            // Map last messages to conversations
-            const lastMsgMap = new Map();
-            for (const msg of lastMessages) {
-                if (!lastMsgMap.has(msg.conversationId)) {
-                    lastMsgMap.set(msg.conversationId, msg);
+                if (!isPrivileged && ctx.user && userRole === "agent") {
+                    const assignedFilter = eq(conversations.assignedToId, ctx.user.id);
+                    whereClause = whereClause ? and(whereClause, assignedFilter) : assignedFilter;
                 }
-            }
 
-            // Combine results
-            return convs.map(conv => ({
-                ...conv,
-                lastMessagePreview: lastMsgMap.get(conv.id)?.content ?? null,
-                lastMessageDirection: lastMsgMap.get(conv.id)?.direction ?? null,
-                lastMessageType: lastMsgMap.get(conv.id)?.messageType ?? null,
-                lastMessageMediaName: lastMsgMap.get(conv.id)?.mediaName ?? null,
-            }));
+                // Optional filters
+                if (input?.assignedToMe && ctx.user?.id) {
+                    const f = eq(conversations.assignedToId, ctx.user.id);
+                    whereClause = whereClause ? and(whereClause, f) : f;
+                }
+
+                if (input?.unreadOnly) {
+                    const f = gt(conversations.unreadCount, 0);
+                    whereClause = whereClause ? and(whereClause, f) : f;
+                }
+
+                const q = input?.search?.trim();
+                if (q) {
+                    const needle = `%${q}%`;
+                    const f = or(like(conversations.contactName, needle), like(conversations.contactPhone, needle));
+                    whereClause = whereClause ? and(whereClause, f) : f;
+                }
+
+                // Build base query without subqueries for better compatibility
+                let query = db
+                    .select({
+                        id: conversations.id,
+                        channel: conversations.channel,
+                        whatsappNumberId: conversations.whatsappNumberId,
+                        whatsappConnectionType: conversations.whatsappConnectionType,
+                        externalChatId: conversations.externalChatId,
+                        facebookPageId: conversations.facebookPageId,
+                        contactPhone: conversations.contactPhone,
+                        contactName: conversations.contactName,
+                        leadId: conversations.leadId,
+                        assignedToId: conversations.assignedToId,
+                        ticketStatus: conversations.ticketStatus,
+                        queueId: conversations.queueId,
+                        lastMessageAt: conversations.lastMessageAt,
+                        unreadCount: conversations.unreadCount,
+                        status: conversations.status,
+                        createdAt: conversations.createdAt,
+                        updatedAt: conversations.updatedAt,
+                    })
+                    .from(conversations);
+
+                if (whereClause) {
+                    query = query.where(whereClause) as typeof query;
+                }
+
+                const sort = input?.sort || "recent";
+                if (sort === "oldest") {
+                    query = query.orderBy(asc(conversations.lastMessageAt)) as typeof query;
+                } else if (sort === "unread") {
+                    query = query.orderBy(desc(conversations.unreadCount), desc(conversations.lastMessageAt)) as typeof query;
+                } else {
+                    query = query.orderBy(desc(conversations.lastMessageAt)) as typeof query;
+                }
+
+                const convs = await query;
+
+                // Get last message info for each conversation in a single query
+                if (convs.length === 0) return [];
+
+                const convIds = convs.map(c => c.id);
+                const lastMessages = await db
+                    .select({
+                        conversationId: chatMessages.conversationId,
+                        content: chatMessages.content,
+                        direction: chatMessages.direction,
+                        messageType: chatMessages.messageType,
+                        mediaName: chatMessages.mediaName,
+                    })
+                    .from(chatMessages)
+                    .where(inArray(chatMessages.conversationId, convIds))
+                    .orderBy(desc(chatMessages.id));
+
+                // Map last messages to conversations
+                const lastMsgMap = new Map();
+                for (const msg of lastMessages) {
+                    if (!lastMsgMap.has(msg.conversationId)) {
+                        lastMsgMap.set(msg.conversationId, msg);
+                    }
+                }
+
+                // Combine results
+                return convs.map(conv => ({
+                    ...conv,
+                    lastMessagePreview: lastMsgMap.get(conv.id)?.content ?? null,
+                    lastMessageDirection: lastMsgMap.get(conv.id)?.direction ?? null,
+                    lastMessageType: lastMsgMap.get(conv.id)?.messageType ?? null,
+                    lastMessageMediaName: lastMsgMap.get(conv.id)?.mediaName ?? null,
+                }));
             } catch (error: any) {
                 console.error("[listConversations] Error:", error.message);
                 throw error;
@@ -228,7 +229,7 @@ export const chatRouter = router({
                 limit: z.number().min(10).max(200).default(50),
             })
         )
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -374,7 +375,7 @@ export const chatRouter = router({
             conversationId: z.number(),
             status: z.enum(["active", "archived", "blocked"])
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.update(conversations).set({ status: input.status }).where(eq(conversations.id, input.conversationId));
@@ -383,7 +384,7 @@ export const chatRouter = router({
 
     delete: permissionProcedure("chat.manage")
         .input(z.object({ conversationId: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.delete(conversations).where(eq(conversations.id, input.conversationId));
@@ -392,7 +393,7 @@ export const chatRouter = router({
 
     assign: permissionProcedure("chat.assign")
         .input(z.object({ conversationId: z.number(), assignedToId: z.number().nullable() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.update(conversations).set({ assignedToId: input.assignedToId }).where(eq(conversations.id, input.conversationId));
@@ -419,7 +420,7 @@ export const chatRouter = router({
             // Facebook specific
             isFacebook: z.boolean().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -436,6 +437,7 @@ export const chatRouter = router({
             const isFacebook = conv.channel === 'facebook';
 
             const insertRes = await db.insert(chatMessages).values({
+                tenantId: ctx.tenantId,
                 conversationId: input.conversationId,
                 whatsappNumberId: isFacebook ? null : (input.whatsappNumberId || conv.whatsappNumberId),
                 whatsappConnectionType: isFacebook ? null : (conv.whatsappConnectionType ?? null),
@@ -456,7 +458,7 @@ export const chatRouter = router({
 
             // Update conversation lastMessageAt and auto-open ticket if pending
             await db.update(conversations)
-                .set({ 
+                .set({
                     lastMessageAt: now,
                     ticketStatus: sql`CASE WHEN ${conversations.ticketStatus} = 'pending' THEN 'open' ELSE ${conversations.ticketStatus} END`
                 })
@@ -577,7 +579,7 @@ export const chatRouter = router({
                             // Extract filename from URL (e.g., /api/uploads/filename -> filename)
                             const filename = path.basename(input.mediaUrl);
                             filePath = path.join(process.cwd(), "storage/uploads", filename);
-                            
+
                             // Verify file exists
                             if (!fs.existsSync(filePath)) {
                                 throw new Error(`Archivo no encontrado: ${filePath}`);
@@ -620,9 +622,9 @@ export const chatRouter = router({
                             accessToken,
                             phoneNumberId: conn.phoneNumberId,
                             to: conv.contactPhone,
-                            message: input.messageType === 'text' 
-                                ? { type: 'text', text: input.content || '' }
-                                : { type: input.messageType, mediaUrl: input.mediaUrl }
+                            payload: (input.messageType === 'text'
+                                ? { type: 'text', body: input.content || '' }
+                                : { type: input.messageType, link: input.mediaUrl }) as any
                         });
 
                         await db.update(chatMessages)
@@ -654,7 +656,7 @@ export const chatRouter = router({
             contactName: z.string().nullish(),
             leadId: z.number().nullish(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -678,6 +680,7 @@ export const chatRouter = router({
                 console.log("[CreateConversation] Creating with phone:", normalizedContactPhone);
 
                 const result = await db.insert(conversations).values({
+                    tenantId: ctx.tenantId,
                     channel,
                     whatsappNumberId: input.whatsappNumberId ?? null,
                     facebookPageId: input.facebookPageId ?? null,

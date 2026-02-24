@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { permissionProcedure, adminProcedure, protectedProcedure, router } from "../_core/trpc";
 
 export const schedulingRouter = router({
-    list: permissionProcedure("scheduling.view").query(async () => {
+    list: permissionProcedure("scheduling.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
 
@@ -14,7 +14,7 @@ export const schedulingRouter = router({
             .orderBy(desc(appointments.appointmentDate));
     }),
 
-    listReasons: permissionProcedure("scheduling.view").query(async () => {
+    listReasons: permissionProcedure("scheduling.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
 
@@ -66,6 +66,7 @@ export const schedulingRouter = router({
             }
 
             const result = await db.insert(appointments).values({
+                tenantId: ctx.tenantId,
                 ...input,
                 appointmentDate: normalizedDate,
                 createdById: ctx.user?.id,
@@ -87,7 +88,7 @@ export const schedulingRouter = router({
             notes: z.string().optional(),
             status: z.enum(['scheduled', 'confirmed', 'completed', 'cancelled', 'no_show']).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -106,7 +107,7 @@ export const schedulingRouter = router({
 
     delete: permissionProcedure("scheduling.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -119,17 +120,17 @@ export const schedulingRouter = router({
             name: z.string().min(1),
             color: z.string().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const result = await db.insert(appointmentReasons).values(input);
+            const result = await db.insert(appointmentReasons).values({ tenantId: ctx.tenantId, ...input });
             return { id: result[0].insertId, success: true };
         }),
 
     deleteReason: adminProcedure
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -140,7 +141,7 @@ export const schedulingRouter = router({
         }),
 
     // Reminder Templates
-    getTemplates: protectedProcedure.query(async () => {
+    getTemplates: protectedProcedure.query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
         return db.select().from(reminderTemplates).where(eq(reminderTemplates.isActive, true));
@@ -153,7 +154,7 @@ export const schedulingRouter = router({
             content: z.string().min(1),
             daysBefore: z.number().min(0),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
             if (input.id) {
@@ -163,6 +164,7 @@ export const schedulingRouter = router({
                 return { success: true, id: input.id };
             } else {
                 const res = await db.insert(reminderTemplates).values({
+                    tenantId: ctx.tenantId,
                     name: input.name, content: input.content, daysBefore: input.daysBefore, isActive: true
                 });
                 return { success: true, id: res[0].insertId };
@@ -171,7 +173,7 @@ export const schedulingRouter = router({
 
     deleteTemplate: permissionProcedure("scheduling.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
             await db.delete(reminderTemplates).where(eq(reminderTemplates.id, input.id));

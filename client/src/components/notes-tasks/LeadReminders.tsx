@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,14 +65,14 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("upcoming");
     const fileInputRef = useRef<HTMLInputElement>(null);
-    
+
     // Form state
     const [newReminder, setNewReminder] = useState({
         message: "",
         scheduledDate: "",
         scheduledTime: "",
         timezone: "America/Asuncion",
-        messageType: "text" as const,
+        messageType: "text" as "text" | "image" | "document" | "template",
         isRecurring: false,
         recurrencePattern: "daily" as "daily" | "weekly" | "monthly",
         recurrenceEndDate: "",
@@ -80,12 +80,19 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
         mediaUrl: "",
         mediaName: "",
     });
-    
+
     const [newButtonText, setNewButtonText] = useState("");
     const [uploadingFile, setUploadingFile] = useState(false);
 
+    const [conversation, setConversation] = useState<any>(null);
+    const getOrCreateConv = trpc.chat.getOrCreateByLeadId.useMutation();
+
+    // Fetch conversation on mount
+    useEffect(() => {
+        getOrCreateConv.mutateAsync({ leadId }).then(setConversation).catch(console.error);
+    }, [leadId]);
+
     const { data: reminders = [], refetch } = trpc.leadReminders.listByLead.useQuery({ leadId });
-    const { data: conversation } = trpc.chat.getOrCreateByLeadId.useQuery({ leadId });
     const createMutation = trpc.leadReminders.create.useMutation();
     const cancelMutation = trpc.leadReminders.cancel.useMutation();
     const deleteMutation = trpc.leadReminders.delete.useMutation();
@@ -99,7 +106,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
         if (!file) return;
 
         setUploadingFile(true);
-        
+
         try {
             const formData = new FormData();
             formData.append("files", file);
@@ -131,12 +138,12 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
 
     const addButton = () => {
         if (!newButtonText.trim() || newReminder.buttons.length >= 3) return;
-        
+
         const newButton: ReminderButton = {
             id: `btn_${Date.now()}`,
             text: newButtonText.trim(),
         };
-        
+
         setNewReminder(prev => ({
             ...prev,
             buttons: [...prev.buttons, newButton],
@@ -162,7 +169,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
         }
 
         const scheduledAt = new Date(`${newReminder.scheduledDate}T${newReminder.scheduledTime}`);
-        
+
         if (scheduledAt <= new Date()) {
             toast.error("La fecha debe ser en el futuro");
             return;
@@ -181,8 +188,8 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                 buttons: newReminder.buttons.length > 0 ? newReminder.buttons : undefined,
                 isRecurring: newReminder.isRecurring,
                 recurrencePattern: newReminder.isRecurring ? newReminder.recurrencePattern : undefined,
-                recurrenceEndDate: newReminder.isRecurring && newReminder.recurrenceEndDate 
-                    ? new Date(newReminder.recurrenceEndDate).toISOString() 
+                recurrenceEndDate: newReminder.isRecurring && newReminder.recurrenceEndDate
+                    ? new Date(newReminder.recurrenceEndDate).toISOString()
                     : undefined,
             });
 
@@ -214,7 +221,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
 
     const handleCancel = async (id: number) => {
         if (!confirm("¿Cancelar este recordatorio?")) return;
-        
+
         try {
             await cancelMutation.mutateAsync({ id });
             toast.success("Recordatorio cancelado");
@@ -226,7 +233,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
 
     const handleDelete = async (id: number) => {
         if (!confirm("¿Eliminar permanentemente este recordatorio?")) return;
-        
+
         try {
             await deleteMutation.mutateAsync({ id });
             toast.success("Recordatorio eliminado");
@@ -257,9 +264,9 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                                 </Badge>
                             )}
                         </div>
-                        
+
                         <p className="text-sm font-medium line-clamp-2">{reminder.message}</p>
-                        
+
                         {buttons && buttons.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
                                 {buttons.map((btn: ReminderButton) => (
@@ -269,7 +276,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                                 ))}
                             </div>
                         )}
-                        
+
                         {reminder.mediaUrl && (
                             <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 {reminder.messageType === "image" ? (
@@ -280,14 +287,14 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                                 <span className="truncate">{reminder.mediaName || "Archivo adjunto"}</span>
                             </div>
                         )}
-                        
+
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
                                 {format(new Date(reminder.scheduledAt), "dd MMM yyyy HH:mm", { locale: es })}
                             </span>
                         </div>
-                        
+
                         {reminder.response && (
                             <div className="mt-2 p-2 bg-green-500/10 rounded text-xs">
                                 <span className="font-medium text-green-600">Respuesta:</span>{" "}
@@ -295,7 +302,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="flex flex-col gap-1">
                         {reminder.status === "scheduled" && (
                             <Button
@@ -339,7 +346,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                         <DialogHeader>
                             <DialogTitle>Nuevo Recordatorio Programado</DialogTitle>
                         </DialogHeader>
-                        
+
                         <div className="space-y-4 py-4">
                             {/* Message */}
                             <div>
@@ -368,7 +375,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                                     accept="image/*,.pdf,.doc,.docx"
                                     className="hidden"
                                 />
-                                
+
                                 {newReminder.mediaUrl ? (
                                     <div className="flex items-center gap-2 p-2 border rounded bg-muted/50">
                                         {newReminder.messageType === "image" ? (
@@ -405,7 +412,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                                 <label className="text-sm font-medium mb-2 block">
                                     Botones de respuesta rápida (máx. 3)
                                 </label>
-                                
+
                                 <div className="flex gap-2 mb-2">
                                     <Input
                                         value={newButtonText}
@@ -422,7 +429,7 @@ export function LeadReminders({ leadId }: LeadRemindersProps) {
                                         <Plus className="h-4 w-4" />
                                     </Button>
                                 </div>
-                                
+
                                 {newReminder.buttons.length > 0 && (
                                     <div className="flex flex-wrap gap-2">
                                         {newReminder.buttons.map((btn) => (

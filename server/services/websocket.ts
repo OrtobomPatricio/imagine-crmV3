@@ -103,11 +103,11 @@ const userSockets = new Map<number, string[]>(); // userId -> socketIds[]
 
 export async function initWebSocket(server: HttpServer): Promise<SocketIOServer> {
     const redis = getRedisClient();
-    
+
     io = new SocketIOServer(server, {
         cors: {
-            origin: process.env.NODE_ENV === "development" 
-                ? ["http://localhost:3000", "http://localhost:5173"] 
+            origin: process.env.NODE_ENV === "development"
+                ? ["http://localhost:3000", "http://localhost:5173"]
                 : [process.env.CLIENT_URL || ""],
             credentials: true,
         },
@@ -144,7 +144,7 @@ export async function initWebSocket(server: HttpServer): Promise<SocketIOServer>
 
             const cookies = cookie.parse(cookieHeader);
             const sessionToken = cookies.session_token || cookies.session;
-            
+
             if (!sessionToken) {
                 return next(new Error("Authentication required"));
             }
@@ -240,11 +240,11 @@ export async function initWebSocket(server: HttpServer): Promise<SocketIOServer>
         // Disconnect handler
         socket.on("disconnect", () => {
             logger.info({ userId, socketId: socket.id }, "websocket: client disconnected");
-            
+
             if (userId) {
                 const sockets = userSockets.get(userId) || [];
                 const filtered = sockets.filter(id => id !== socket.id);
-                
+
                 if (filtered.length === 0) {
                     userSockets.delete(userId);
                     // Broadcast offline status
@@ -304,13 +304,13 @@ export function broadcast(event: keyof ServerToClientEvents, data: any): void {
 // Emit to users with specific role
 export async function emitToRole(role: string, event: keyof ServerToClientEvents, data: any): Promise<void> {
     if (!io) return;
-    
+
     const db = await getDb();
     if (!db) return;
 
     const userRows = await db.select({ id: users.id })
         .from(users)
-        .where(eq(users.role, role));
+        .where(eq(users.role, role as any));
 
     userRows.forEach(row => {
         emitToUser(row.id, event, data);

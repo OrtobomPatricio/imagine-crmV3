@@ -38,7 +38,7 @@ export function TagSelector({
 }: TagSelectorProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
-    
+
     const { data: allTags = [] } = trpc.tags.list.useQuery();
     const createMutation = trpc.tags.create.useMutation();
 
@@ -58,20 +58,20 @@ export function TagSelector({
 
     const createNewTag = async () => {
         if (!search.trim()) return;
-        
+
         const colors = [
             "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e",
             "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6",
             "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899",
         ];
         const randomColor = colors[Math.floor(Math.random() * colors.length)];
-        
+
         try {
             const result = await createMutation.mutateAsync({
                 name: search.trim(),
                 color: randomColor,
             });
-            
+
             addTag({
                 id: result.id,
                 name: search.trim(),
@@ -146,7 +146,7 @@ export function TagSelector({
                                     {availableTags.map((tag) => (
                                         <CommandItem
                                             key={tag.id}
-                                            onSelect={() => addTag(tag)}
+                                            onSelect={() => addTag(tag as Tag)}
                                             className="flex items-center gap-2"
                                         >
                                             <span

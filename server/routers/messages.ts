@@ -6,7 +6,7 @@ import { permissionProcedure, router } from "../_core/trpc";
 
 export const messagesRouter = router({
     getActiveStats: permissionProcedure("chat.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return { activeConversations: 0, unansweredMessages: 0, avgResponseTime: 0 };
 
@@ -88,7 +88,7 @@ export const messagesRouter = router({
                 to: z.date().optional(),
             }).optional(),
         }).optional())
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return { total: 0, agents: [] };
 

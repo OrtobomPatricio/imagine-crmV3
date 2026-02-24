@@ -6,7 +6,7 @@ import { encryptSecret } from "../_core/crypto";
 import { eq, desc } from "drizzle-orm";
 
 export const facebookRouter = router({
-    listPages: permissionProcedure("settings.view").query(async () => {
+    listPages: permissionProcedure("settings.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
         return db.select().from(facebookPages).orderBy(desc(facebookPages.createdAt));
@@ -19,7 +19,7 @@ export const facebookRouter = router({
             accessToken: z.string(),
             pictureUrl: z.string().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -34,7 +34,7 @@ export const facebookRouter = router({
                     updatedAt: new Date(),
                 }).where(eq(facebookPages.id, existing[0].id));
             } else {
-                await db.insert(facebookPages).values({
+                await db.insert(facebookPages).values({ tenantId: ctx.tenantId, 
                     pageId: input.pageId,
                     name: input.name,
                     accessToken: encryptSecret(input.accessToken),
@@ -47,7 +47,7 @@ export const facebookRouter = router({
 
     disconnectPage: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 

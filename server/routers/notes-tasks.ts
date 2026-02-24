@@ -8,7 +8,7 @@ export const notesTasksRouter = router({
     // Lead Notes
     listNotes: permissionProcedure("leads.view")
         .input(z.object({ leadId: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
             
@@ -37,7 +37,7 @@ export const notesTasksRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
-            const result = await db.insert(leadNotes).values({
+            const result = await db.insert(leadNotes).values({ tenantId: ctx.tenantId, 
                 leadId: input.leadId,
                 content: input.content,
                 createdById: ctx.user?.id,
@@ -51,7 +51,7 @@ export const notesTasksRouter = router({
             id: z.number(),
             content: z.string().min(1),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -64,7 +64,7 @@ export const notesTasksRouter = router({
 
     deleteNote: permissionProcedure("leads.edit")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -134,7 +134,7 @@ export const notesTasksRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
-            const result = await db.insert(leadTasks).values({
+            const result = await db.insert(leadTasks).values({ tenantId: ctx.tenantId, 
                 leadId: input.leadId,
                 title: input.title,
                 description: input.description,
@@ -157,7 +157,7 @@ export const notesTasksRouter = router({
             assignedToId: z.number().optional(),
             status: z.enum(["pending", "completed", "cancelled"]).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -173,7 +173,7 @@ export const notesTasksRouter = router({
 
     deleteTask: permissionProcedure("leads.edit")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             

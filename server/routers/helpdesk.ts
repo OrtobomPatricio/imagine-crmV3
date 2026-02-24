@@ -6,7 +6,7 @@ import { permissionProcedure, router } from "../_core/trpc";
 
 export const helpdeskRouter = router({
   // Queues
-  listQueues: permissionProcedure("helpdesk.view").query(async () => {
+  listQueues: permissionProcedure("helpdesk.view").query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(supportQueues).orderBy(supportQueues.name);
@@ -18,10 +18,11 @@ export const helpdeskRouter = router({
       color: z.string().min(3).max(32),
       greetingMessage: z.string().max(5000).optional().nullable(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const res = await db.insert(supportQueues).values({
+        tenantId: ctx.tenantId,
         name: input.name,
         color: input.color,
         greetingMessage: input.greetingMessage ?? null,
@@ -36,7 +37,7 @@ export const helpdeskRouter = router({
       color: z.string().min(3).max(32).optional(),
       greetingMessage: z.string().max(5000).optional().nullable(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.update(supportQueues)
@@ -51,7 +52,7 @@ export const helpdeskRouter = router({
 
   deleteQueue: permissionProcedure("helpdesk.manage")
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.delete(supportQueues).where(eq(supportQueues.id, input.id));
@@ -61,7 +62,7 @@ export const helpdeskRouter = router({
   // Queue membership (assign agents to queues)
   listQueueMembers: permissionProcedure("helpdesk.view")
     .input(z.object({ queueId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select({
@@ -82,7 +83,7 @@ export const helpdeskRouter = router({
       queueId: z.number(),
       userIds: z.array(z.number()),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -91,6 +92,7 @@ export const helpdeskRouter = router({
       if (input.userIds.length) {
         await db.insert(supportUserQueues).values(
           input.userIds.map(uid => ({
+            tenantId: ctx.tenantId,
             queueId: input.queueId,
             userId: uid,
           }))
@@ -149,7 +151,7 @@ export const helpdeskRouter = router({
       conversationId: z.number(),
       ticketStatus: z.enum(["pending", "open", "closed"]),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.update(conversations)
@@ -163,11 +165,11 @@ export const helpdeskRouter = router({
       conversationId: z.number(),
       assignedToId: z.number().nullable(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.update(conversations)
-        .set({ 
+        .set({
           assignedToId: input.assignedToId,
           // Auto-open ticket if pending when assigning
           ticketStatus: sql`CASE WHEN ${conversations.ticketStatus} = 'pending' THEN 'open' ELSE ${conversations.ticketStatus} END`
@@ -181,7 +183,7 @@ export const helpdeskRouter = router({
       conversationId: z.number(),
       queueId: z.number().nullable(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.update(conversations)
@@ -193,7 +195,7 @@ export const helpdeskRouter = router({
   // Quick Answers
   listQuickAnswers: permissionProcedure("helpdesk.view")
     .input(z.object({ search: z.string().optional() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return [];
       if (input?.search && input.search.trim()) {
@@ -216,7 +218,7 @@ export const helpdeskRouter = router({
         type: z.string(),
       })).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       if (input.id) {
@@ -228,6 +230,7 @@ export const helpdeskRouter = router({
         return { id: input.id };
       }
       const res = await db.insert(quickAnswers).values({
+        tenantId: ctx.tenantId,
         shortcut: input.shortcut,
         message: input.message,
         attachments: input.attachments ?? [],
@@ -237,7 +240,7 @@ export const helpdeskRouter = router({
 
   deleteQuickAnswer: permissionProcedure("helpdesk.manage")
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.delete(quickAnswers).where(eq(quickAnswers.id, input.id));

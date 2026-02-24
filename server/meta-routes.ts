@@ -124,7 +124,7 @@ export function registerMetaRoutes(app: Express) {
                     const rawPhone = phone.display_phone_number.replace(/\D/g, "");
 
                     // Insert number
-                    const numRes = await database.insert(whatsappNumbers).values({
+                    const numRes = await database.insert(whatsappNumbers).values({ tenantId: 1, 
                         phoneNumber: rawPhone,
                         displayName: phone.display_phone_number, // or name_status?
                         country: "Unknown", // we'd need to parse code
@@ -136,7 +136,7 @@ export function registerMetaRoutes(app: Express) {
                     const numId = numRes[0].insertId;
 
                     // Insert connection
-                    await database.insert(whatsappConnections).values({
+                    await database.insert(whatsappConnections).values({ tenantId: 1, 
                         whatsappNumberId: numId,
                         connectionType: "api",
                         phoneNumberId: phone.id,

@@ -17,7 +17,7 @@ export const gamificationRouter = router({
             .mutation(async ({ input, ctx }) => {
                 const db = await getDb();
                 if (!db || !ctx.user) return { success: false };
-                await db.insert(achievements).values({
+                await db.insert(achievements).values({ tenantId: ctx.tenantId, 
                     userId: ctx.user.id,
                     type: input.type,
                     metadata: input.metadata,
@@ -44,7 +44,7 @@ export const gamificationRouter = router({
             .mutation(async ({ input, ctx }) => {
                 const db = await getDb();
                 if (!db || !ctx.user) return { success: false };
-                await db.insert(goals).values({
+                await db.insert(goals).values({ tenantId: ctx.tenantId, 
                     userId: ctx.user.id,
                     type: input.type,
                     targetAmount: input.targetAmount,

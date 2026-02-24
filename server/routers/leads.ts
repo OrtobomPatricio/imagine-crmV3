@@ -42,7 +42,7 @@ export const leadsRouter = router({
             query: z.string().trim().min(1),
             limit: z.number().default(10)
         }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -64,7 +64,7 @@ export const leadsRouter = router({
             limit: z.number().min(1).max(100).default(50),
             offset: z.number().min(0).default(0),
         }).optional())
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -82,7 +82,7 @@ export const leadsRouter = router({
 
     getById: permissionProcedure("leads.view")
         .input(z.object({ id: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
 
@@ -150,7 +150,7 @@ export const leadsRouter = router({
                     ? COMMISSION_RATES.PANAMA
                     : COMMISSION_RATES.DEFAULT;
 
-                const result = await tx.insert(leads).values({
+                const result = await tx.insert(leads).values({ tenantId: ctx.tenantId, 
                     ...input,
                     email: input.email || null, // handle empty string vs null
                     value: input.value ? input.value.toString() : "0.00",
@@ -180,7 +180,7 @@ export const leadsRouter = router({
         }),
 
     export: permissionProcedure("leads.export")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             const allLeads = await db.select().from(leads);
@@ -276,7 +276,7 @@ export const leadsRouter = router({
             id: z.number(),
             pipelineStageId: z.number(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -311,7 +311,7 @@ export const leadsRouter = router({
             pipelineStageId: z.number(),
             orderedLeadIds: z.array(z.number()).min(0),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -335,7 +335,7 @@ export const leadsRouter = router({
 
     delete: permissionProcedure("leads.delete")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.delete(leads).where(eq(leads.id, input.id));
@@ -355,7 +355,7 @@ export const leadsRouter = router({
                 dateTo: z.string().optional().nullable(),
             }).optional(),
         }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return {};
 

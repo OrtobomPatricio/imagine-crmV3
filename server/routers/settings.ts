@@ -7,7 +7,7 @@ import { getOrCreateAppSettings, updateAppSettings } from "../services/app-setti
 import { encryptSecret } from "../_core/crypto";
 
 export const settingsRouter = router({
-    get: permissionProcedure("settings.view").query(async () => {
+    get: permissionProcedure("settings.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return null;
         const row = await getOrCreateAppSettings(db);
@@ -15,7 +15,7 @@ export const settingsRouter = router({
     }),
 
     getScheduling: permissionProcedure("scheduling.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return null;
             const row = await getOrCreateAppSettings(db);
@@ -122,7 +122,7 @@ export const settingsRouter = router({
                 sessionTimeoutMinutes: z.number().optional(),
             })
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await updateAppSettings(db, { securityConfig: input.securityConfig });
@@ -147,7 +147,7 @@ export const settingsRouter = router({
 
     updateDashboardLayout: permissionProcedure("settings.manage")
         .input(z.object({ layout: z.array(z.any()) }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             const currentSettings = await getOrCreateAppSettings(db);
@@ -169,7 +169,7 @@ export const settingsRouter = router({
             pass: z.string().optional().nullable(),
             from: z.string().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -201,7 +201,7 @@ export const settingsRouter = router({
             endpoint: z.string().optional(),
             publicUrl: z.string().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -231,7 +231,7 @@ export const settingsRouter = router({
             apiKey: z.string().optional().nullable(),
             model: z.string(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -254,7 +254,7 @@ export const settingsRouter = router({
         .input(z.object({
             apiKey: z.string().optional().nullable(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 

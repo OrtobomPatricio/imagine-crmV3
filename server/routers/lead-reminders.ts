@@ -14,7 +14,7 @@ export const leadRemindersRouter = router({
     // List reminders for a lead
     listByLead: permissionProcedure("leads.view")
         .input(z.object({ leadId: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
             
@@ -28,7 +28,7 @@ export const leadRemindersRouter = router({
     // Get single reminder
     getById: permissionProcedure("leads.view")
         .input(z.object({ id: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
             
@@ -73,7 +73,7 @@ export const leadRemindersRouter = router({
                 throw new Error("Debe especificar el patrón de recurrencia");
             }
             
-            const result = await db.insert(leadReminders).values({
+            const result = await db.insert(leadReminders).values({ tenantId: ctx.tenantId, 
                 leadId: input.leadId,
                 conversationId: input.conversationId || null,
                 createdById: ctx.user!.id,
@@ -112,7 +112,7 @@ export const leadRemindersRouter = router({
             mediaName: z.string().optional(),
             buttons: z.array(buttonSchema).max(3).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -151,7 +151,7 @@ export const leadRemindersRouter = router({
     // Cancel reminder
     cancel: permissionProcedure("leads.edit")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -180,7 +180,7 @@ export const leadRemindersRouter = router({
     // Delete reminder
     delete: permissionProcedure("leads.edit")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -197,7 +197,7 @@ export const leadRemindersRouter = router({
             hours: z.number().default(24),
             leadId: z.number().optional(),
         }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
             
@@ -227,7 +227,7 @@ export const leadRemindersRouter = router({
             reminderId: z.number(),
             buttonId: z.string(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             

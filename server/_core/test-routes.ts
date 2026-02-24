@@ -40,7 +40,7 @@ export function registerTestRoutes(app: Express) {
 
       let whatsappNumberId = existingNum[0]?.id;
       if (!whatsappNumberId) {
-        const ins = await db.insert(whatsappNumbers).values({
+        const ins = await db.insert(whatsappNumbers).values({ tenantId: 1, 
           phoneNumber,
           displayName,
           country: "Paraguay",
@@ -64,7 +64,7 @@ export function registerTestRoutes(app: Express) {
           .set({ connectionType: "api", isConnected: true, phoneNumberId })
           .where(eq(whatsappConnections.whatsappNumberId, whatsappNumberId));
       } else {
-        await db.insert(whatsappConnections).values({
+        await db.insert(whatsappConnections).values({ tenantId: 1, 
           whatsappNumberId,
           connectionType: "api",
           isConnected: true,
@@ -76,7 +76,7 @@ export function registerTestRoutes(app: Express) {
       const q = await db.select().from(supportQueues).limit(1);
       let queueId = q[0]?.id;
       if (!queueId) {
-        const ins = await db.insert(supportQueues).values({
+        const ins = await db.insert(supportQueues).values({ tenantId: 1, 
           name: "Default",
           color: "#22c55e",
           greetingMessage: "Hola 👋 ¿En qué puedo ayudarte?",
@@ -121,7 +121,7 @@ export function registerTestRoutes(app: Express) {
 
       let conversationId = existing[0]?.id as number | undefined;
       if (!conversationId) {
-        const ins = await db.insert(conversations).values({
+        const ins = await db.insert(conversations).values({ tenantId: 1, 
           channel: "whatsapp",
           whatsappNumberId: whatsappNumberId ?? null,
           whatsappConnectionType: "qr",
@@ -141,7 +141,7 @@ export function registerTestRoutes(app: Express) {
           .where(eq(conversations.id, conversationId));
       }
 
-      await db.insert(chatMessages).values({
+      await db.insert(chatMessages).values({ tenantId: 1, 
         conversationId,
         whatsappNumberId: whatsappNumberId ?? null,
         whatsappConnectionType: "qr",

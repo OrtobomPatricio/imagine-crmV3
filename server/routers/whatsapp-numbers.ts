@@ -6,7 +6,7 @@ import { permissionProcedure, router } from "../_core/trpc";
 import { maskSecret, encryptSecret } from "../_core/crypto";
 
 export const whatsappNumbersRouter = router({
-    list: permissionProcedure("monitoring.view").query(async () => {
+    list: permissionProcedure("monitoring.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
 
@@ -17,7 +17,7 @@ export const whatsappNumbersRouter = router({
 
     getById: permissionProcedure("monitoring.view")
         .input(z.object({ id: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
 
@@ -47,11 +47,11 @@ export const whatsappNumbersRouter = router({
             country: z.string().min(1),
             countryCode: z.string().min(1),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
-            const result = await db.insert(whatsappNumbers).values({
+            const result = await db.insert(whatsappNumbers).values({ tenantId: ctx.tenantId, 
                 ...input,
                 status: 'warming_up',
                 warmupDay: 0,
@@ -67,7 +67,7 @@ export const whatsappNumbersRouter = router({
             id: z.number(),
             status: z.enum(['active', 'warming_up', 'blocked', 'disconnected']),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -83,7 +83,7 @@ export const whatsappNumbersRouter = router({
             id: z.number(),
             isConnected: z.boolean(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -99,7 +99,7 @@ export const whatsappNumbersRouter = router({
 
     delete: permissionProcedure("monitoring.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -107,7 +107,7 @@ export const whatsappNumbersRouter = router({
             return { success: true };
         }),
 
-    getStats: permissionProcedure("monitoring.view").query(async () => {
+    getStats: permissionProcedure("monitoring.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return {
             total: 0,
@@ -141,7 +141,7 @@ export const whatsappNumbersRouter = router({
             businessAccountId: z.string().min(1),
             accessToken: z.string().min(1).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -152,7 +152,7 @@ export const whatsappNumbersRouter = router({
                 .limit(1);
 
             if (existing.length === 0) {
-                await db.insert(whatsappConnections).values({
+                await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
                     whatsappNumberId: input.id,
                     connectionType: 'api',
                     phoneNumberId: input.phoneNumberId,

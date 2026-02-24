@@ -5,11 +5,21 @@ import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
 
 export const workflowsRouter = router({
-    list: permissionProcedure("campaigns.view").query(async () => {
+    list: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
         return db.select().from(workflows).orderBy(desc(workflows.createdAt));
     }),
+
+    get: permissionProcedure("campaigns.view")
+        .input(z.object({ id: z.number() }))
+        .query(async ({ input, ctx }) => {
+            const db = await getDb();
+            if (!db) throw new Error("Database not available");
+            const result = await db.select().from(workflows).where(eq(workflows.id, input.id)).limit(1);
+            if (!result[0]) throw new Error("Workflow not found");
+            return result[0];
+        }),
 
     create: permissionProcedure("campaigns.manage")
         .input(z.object({
@@ -19,11 +29,12 @@ export const workflowsRouter = router({
             triggerConfig: z.any().optional(),
             actions: z.array(z.any()).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
             const result = await db.insert(workflows).values({
+                tenantId: ctx.tenantId,
                 ...input,
                 isActive: true
             });
@@ -40,7 +51,7 @@ export const workflowsRouter = router({
             actions: z.array(z.any()).optional(),
             isActive: z.boolean().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
 
@@ -50,7 +61,7 @@ export const workflowsRouter = router({
 
     toggle: permissionProcedure("campaigns.manage")
         .input(z.object({ id: z.number(), isActive: z.boolean() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.update(workflows).set({ isActive: input.isActive }).where(eq(workflows.id, input.id));
@@ -59,7 +70,7 @@ export const workflowsRouter = router({
 
     delete: permissionProcedure("campaigns.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.delete(workflows).where(eq(workflows.id, input.id));

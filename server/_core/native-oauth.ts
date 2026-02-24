@@ -44,7 +44,7 @@ export function registerNativeOAuth(app: Express) {
 
     // Cookie parser and sessions (memory store for dev, Redis for prod)
     app.use(cookieParser());
-    
+
     const sessionConfig: any = {
         secret: process.env.JWT_SECRET || 'fallback-secret-change-me',
         resave: false,
@@ -55,7 +55,7 @@ export function registerNativeOAuth(app: Express) {
             maxAge: ONE_YEAR_MS,
         },
     };
-    
+
     app.use(session(sessionConfig));
 
     app.use(passport.initialize());
@@ -118,6 +118,7 @@ export function registerNativeOAuth(app: Express) {
                     const isOwner = ownerEmail && user.email && user.email.toLowerCase() === ownerEmail.toLowerCase();
 
                     await db.upsertUser({
+                        tenantId: 1,
                         openId: user.openId,
                         name: user.name || null,
                         email: user.email || null,
@@ -215,6 +216,7 @@ export function registerNativeOAuth(app: Express) {
                     const isOwner = ownerEmail && user.email && user.email.toLowerCase() === ownerEmail.toLowerCase();
 
                     await db.upsertUser({
+                        tenantId: 1,
                         openId: user.openId,
                         name: user.name || null,
                         email: user.email || null,

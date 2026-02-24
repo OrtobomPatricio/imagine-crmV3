@@ -12,7 +12,7 @@ export const securityRouter = router({
             limit: z.number().min(10).max(200).default(50),
             offset: z.number().default(0),
         }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
 

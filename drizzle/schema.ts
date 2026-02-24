@@ -1,10 +1,25 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, decimal, json, uniqueIndex, index } from "drizzle-orm/mysql-core";
 
 /**
+ * Organizations/Tenants for SaaS Multi-Tenancy
+ */
+export const tenants = mysqlTable("tenants", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  status: mysqlEnum("status", ["active", "suspended", "canceled"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = typeof tenants.$inferInsert;
+
+/**
  * Core user table backing auth flow.
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -32,6 +47,7 @@ export type InsertUser = typeof users.$inferInsert;
  */
 export const appSettings = mysqlTable("app_settings", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   singleton: int("singleton").notNull().default(1),
   companyName: varchar("companyName", { length: 120 }).default("Imagine Lab CRM").notNull(),
   logoUrl: varchar("logoUrl", { length: 500 }),
@@ -127,7 +143,7 @@ export const appSettings = mysqlTable("app_settings", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
-  uniqSingleton: uniqueIndex("uniq_app_settings_singleton").on(t.singleton),
+  uniqSingleton: uniqueIndex("uniq_app_settings_singleton").on(t.tenantId, t.singleton),
 }));
 
 export type AppSettings = typeof appSettings.$inferSelect;
@@ -138,6 +154,7 @@ export type InsertAppSettings = typeof appSettings.$inferInsert;
  */
 export const reminderTemplates = mysqlTable("reminder_templates", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
   content: text("content").notNull(),
   // e.g. "Hola {{name}}, recordá tu cita mañana a las {{time}}"
@@ -155,7 +172,8 @@ export type InsertReminderTemplate = typeof reminderTemplates.$inferInsert;
  */
 export const whatsappNumbers = mysqlTable("whatsapp_numbers", {
   id: int("id").autoincrement().primaryKey(),
-  phoneNumber: varchar("phoneNumber", { length: 20 }).notNull().unique(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  phoneNumber: varchar("phoneNumber", { length: 20 }).notNull(),
   displayName: varchar("displayName", { length: 100 }),
   country: varchar("country", { length: 50 }).notNull(),
   countryCode: varchar("countryCode", { length: 5 }).notNull(),
@@ -169,7 +187,9 @@ export const whatsappNumbers = mysqlTable("whatsapp_numbers", {
   isConnected: boolean("isConnected").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  uniqWhatsappPhone: uniqueIndex("uniq_whatsapp_phone").on(t.tenantId, t.phoneNumber),
+}));
 
 export type WhatsappNumber = typeof whatsappNumbers.$inferSelect;
 export type InsertWhatsappNumber = typeof whatsappNumbers.$inferInsert;
@@ -179,6 +199,7 @@ export type InsertWhatsappNumber = typeof whatsappNumbers.$inferInsert;
  */
 export const pipelines = mysqlTable("pipelines", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
   isDefault: boolean("isDefault").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -193,6 +214,7 @@ export type InsertPipeline = typeof pipelines.$inferInsert;
  */
 export const pipelineStages = mysqlTable("pipeline_stages", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   pipelineId: int("pipelineId").notNull().references(() => pipelines.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
   color: varchar("color", { length: 20 }).default("#e2e8f0"),
@@ -210,6 +232,7 @@ export type InsertPipelineStage = typeof pipelineStages.$inferInsert;
  */
 export const customFieldDefinitions = mysqlTable("custom_field_definitions", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   entityType: mysqlEnum("entityType", ["lead", "contact", "company"]).default("lead").notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   type: mysqlEnum("type", ["text", "number", "date", "select", "checkbox"]).notNull(),
@@ -228,6 +251,7 @@ export type InsertCustomFieldDefinition = typeof customFieldDefinitions.$inferIn
  */
 export const leads = mysqlTable("leads", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 200 }).notNull(),
   phone: varchar("phone", { length: 20 }).notNull(), // Unique index added below
   email: varchar("email", { length: 320 }),
@@ -250,7 +274,7 @@ export const leads = mysqlTable("leads", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
-  uniqPhone: uniqueIndex("uniq_leads_phone").on(t.phone),
+  uniqPhone: uniqueIndex("uniq_leads_phone").on(t.tenantId, t.phone),
 }));
 
 export type Lead = typeof leads.$inferSelect;
@@ -261,6 +285,7 @@ export type InsertLead = typeof leads.$inferInsert;
  */
 export const templates = mysqlTable("templates", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 150 }).notNull(),
   content: text("content").notNull(),
   type: mysqlEnum("type", ["whatsapp", "email"]).default("whatsapp").notNull(),
@@ -278,6 +303,7 @@ export type InsertTemplate = typeof templates.$inferInsert;
  */
 export const campaigns = mysqlTable("campaigns", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 200 }).notNull(),
   message: text("message").notNull(),
   type: mysqlEnum("type", ["whatsapp", "email"]).default("whatsapp").notNull(),
@@ -305,6 +331,7 @@ export type InsertCampaign = typeof campaigns.$inferInsert;
  */
 export const campaignRecipients = mysqlTable("campaign_recipients", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   campaignId: int("campaignId").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
   leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
   whatsappNumberId: int("whatsappNumberId").references(() => whatsappNumbers.id, { onDelete: "set null" }),
@@ -318,7 +345,7 @@ export const campaignRecipients = mysqlTable("campaign_recipients", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   // Unique constraint: prevent duplicate recipients for same campaign+lead
-  uniqueCampaignLead: uniqueIndex("unique_campaign_lead").on(table.campaignId, table.leadId),
+  uniqueCampaignLead: uniqueIndex("unique_campaign_lead").on(table.tenantId, table.campaignId, table.leadId),
 }));
 
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
@@ -331,6 +358,7 @@ export type InsertCampaignRecipient = typeof campaignRecipients.$inferInsert;
  */
 export const activityLogs = mysqlTable("activity_logs", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   userId: int("userId").references(() => users.id, { onDelete: "set null" }),
   action: varchar("action", { length: 100 }).notNull(),
   entityType: varchar("entityType", { length: 50 }),
@@ -347,6 +375,7 @@ export type InsertActivityLog = typeof activityLogs.$inferInsert;
  */
 export const integrations = mysqlTable("integrations", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
   type: mysqlEnum("type", ["n8n", "chatwoot", "zapier", "webhook"]).notNull(),
   webhookUrl: varchar("webhookUrl", { length: 500 }).notNull(),
@@ -372,6 +401,7 @@ export type InsertIntegration = typeof integrations.$inferInsert;
  */
 export const workflows = mysqlTable("workflows", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 200 }).notNull(),
   description: text("description"),
   isActive: boolean("isActive").default(true).notNull(),
@@ -390,6 +420,7 @@ export type InsertWorkflow = typeof workflows.$inferInsert;
  */
 export const workflowLogs = mysqlTable("workflow_logs", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   workflowId: int("workflowId").notNull().references(() => workflows.id, { onDelete: "cascade" }),
   entityId: int("entityId").notNull(), // leadId or other
   status: mysqlEnum("status", ["success", "failed"]).notNull(),
@@ -406,6 +437,7 @@ export type InsertWorkflowLog = typeof workflowLogs.$inferInsert;
  */
 export const appointmentReasons = mysqlTable("appointment_reasons", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
   color: varchar("color", { length: 20 }).default("#3b82f6"),
   isActive: boolean("isActive").default(true).notNull(),
@@ -421,6 +453,7 @@ export type InsertAppointmentReason = typeof appointmentReasons.$inferInsert;
  */
 export const appointments = mysqlTable("appointments", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   firstName: varchar("firstName", { length: 100 }).notNull(),
   lastName: varchar("lastName", { length: 100 }).notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
@@ -450,6 +483,7 @@ export const supportQueues = mysqlTable(
   "support_queues",
   {
     id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
     color: varchar("color", { length: 32 }).notNull(),
     greetingMessage: text("greetingMessage"),
@@ -457,7 +491,7 @@ export const supportQueues = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => ({
-    uniqName: uniqueIndex("uniq_support_queues_name").on(t.name),
+    uniqName: uniqueIndex("uniq_support_queues_name").on(t.tenantId, t.name),
   })
 );
 
@@ -468,12 +502,13 @@ export const supportUserQueues = mysqlTable(
   "support_user_queues",
   {
     id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
     userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
     queueId: int("queueId").notNull().references(() => supportQueues.id, { onDelete: "cascade" }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (t) => ({
-    uniqUserQueue: uniqueIndex("uniq_user_queue").on(t.userId, t.queueId),
+    uniqUserQueue: uniqueIndex("uniq_user_queue").on(t.tenantId, t.userId, t.queueId),
   })
 );
 
@@ -482,6 +517,7 @@ export type InsertSupportUserQueue = typeof supportUserQueues.$inferInsert;
 
 export const quickAnswers = mysqlTable("quick_answers", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   shortcut: text("shortcut").notNull(),
   message: text("message").notNull(),
   attachments: json("attachments").$type<{ url: string; name: string; type: string }[]>(),
@@ -495,6 +531,7 @@ export type InsertQuickAnswer = typeof quickAnswers.$inferInsert;
 
 export const conversations = mysqlTable("conversations", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   channel: mysqlEnum("channel", ["whatsapp", "facebook"]).default("whatsapp").notNull(),
   whatsappNumberId: int("whatsappNumberId").references(() => whatsappNumbers.id, { onDelete: "set null" }),
   whatsappConnectionType: mysqlEnum("whatsappConnectionType", ["api", "qr"]),
@@ -523,6 +560,7 @@ export type InsertConversation = typeof conversations.$inferInsert;
  */
 export const chatMessages = mysqlTable("chat_messages", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   whatsappNumberId: int("whatsappNumberId").references(() => whatsappNumbers.id, { onDelete: "set null" }),
   whatsappConnectionType: mysqlEnum("whatsappConnectionType", ["api", "qr"]),
@@ -547,7 +585,7 @@ export const chatMessages = mysqlTable("chat_messages", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => ({
   // Idempotency: prevent same WA message in same conversation
-  uniqWaMessage: uniqueIndex("uniq_wa_message").on(t.whatsappMessageId, t.conversationId),
+  uniqWaMessage: uniqueIndex("uniq_wa_message").on(t.tenantId, t.whatsappMessageId, t.conversationId),
   // Performance index for conversation history (also backs FK)
   idxConversationCreated: index("idx_chat_messages_conversation_created").on(t.conversationId, t.createdAt),
 }));
@@ -560,6 +598,7 @@ export type InsertChatMessage = typeof chatMessages.$inferInsert;
  */
 export const messageQueue = mysqlTable("message_queue", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   // Link to the actual chat message (it should be created in 'pending' state first)
   chatMessageId: int("chatMessageId").references(() => chatMessages.id, { onDelete: "cascade" }),
@@ -581,38 +620,39 @@ export type InsertMessageQueueItem = typeof messageQueue.$inferInsert;
  */
 export const leadReminders = mysqlTable("lead_reminders", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
   conversationId: int("conversationId").references(() => conversations.id, { onDelete: "cascade" }),
   createdById: int("createdById").notNull().references(() => users.id, { onDelete: "cascade" }),
-  
+
   // Scheduling
   scheduledAt: timestamp("scheduledAt").notNull(), // When to send
   timezone: varchar("timezone", { length: 50 }).default("America/Asuncion"),
-  
+
   // Message content
   message: text("message").notNull(),
   messageType: mysqlEnum("messageType", ["text", "image", "document", "template"]).default("text"),
   mediaUrl: varchar("mediaUrl", { length: 500 }),
   mediaName: varchar("mediaName", { length: 200 }),
-  
+
   // Interactive buttons (JSON array of button options)
   buttons: json("buttons"), // [{ id: string, text: string }, ...]
-  
+
   // Status tracking
   status: mysqlEnum("status", ["scheduled", "sent", "failed", "cancelled"]).default("scheduled"),
   sentAt: timestamp("sentAt"),
   errorMessage: text("errorMessage"),
-  
+
   // Response tracking (if buttons were clicked)
   response: varchar("response", { length: 200 }), // Button ID that was clicked
   respondedAt: timestamp("respondedAt"),
-  
+
   // Recurring reminders
   isRecurring: boolean("isRecurring").default(false),
   recurrencePattern: mysqlEnum("recurrencePattern", ["daily", "weekly", "monthly"]),
   recurrenceEndDate: timestamp("recurrenceEndDate"),
   parentReminderId: int("parentReminderId"), // For recurring instances
-  
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
@@ -628,6 +668,7 @@ export type InsertLeadReminder = typeof leadReminders.$inferInsert;
  */
 export const whatsappConnections = mysqlTable("whatsapp_connections", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   whatsappNumberId: int("whatsappNumberId").notNull().unique().references(() => whatsappNumbers.id, { onDelete: "cascade" }),
   connectionType: mysqlEnum("connectionType", ["api", "qr"]).notNull(),
   accessToken: text("accessToken"),
@@ -651,14 +692,17 @@ export type InsertWhatsappConnection = typeof whatsappConnections.$inferInsert;
  */
 export const facebookPages = mysqlTable("facebook_pages", {
   id: int("id").autoincrement().primaryKey(),
-  pageId: varchar("pageId", { length: 100 }).notNull().unique(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pageId: varchar("pageId", { length: 100 }).notNull(),
   name: varchar("name", { length: 200 }).notNull(),
   accessToken: text("accessToken"), // Long-lived token
   isConnected: boolean("isConnected").default(true).notNull(),
   pictureUrl: varchar("pictureUrl", { length: 500 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  uniqFbPage: uniqueIndex("uniq_fb_page").on(t.tenantId, t.pageId),
+}));
 
 export type FacebookPage = typeof facebookPages.$inferSelect;
 export type InsertFacebookPage = typeof facebookPages.$inferInsert;
@@ -668,6 +712,7 @@ export type InsertFacebookPage = typeof facebookPages.$inferInsert;
  */
 export const accessLogs = mysqlTable("access_logs", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   userId: int("userId").references(() => users.id, { onDelete: "set null" }),
   action: varchar("action", { length: 200 }).notNull(),
   entityType: varchar("entityType", { length: 100 }),
@@ -688,6 +733,7 @@ export type InsertAccessLog = typeof accessLogs.$inferInsert;
  */
 export const sessions = mysqlTable("sessions", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   sessionToken: varchar("sessionToken", { length: 255 }).notNull().unique(),
   ipAddress: varchar("ipAddress", { length: 45 }),
@@ -711,6 +757,7 @@ export type InsertSession = typeof sessions.$inferInsert;
  */
 export const goals = mysqlTable('goals', {
   id: int('id').autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   userId: int('userId').notNull().references(() => users.id, { onDelete: "cascade" }),
   type: mysqlEnum('type', ['sales_amount', 'deals_closed', 'leads_created', 'messages_sent']).notNull(),
   targetAmount: int('targetAmount').notNull(),
@@ -730,6 +777,7 @@ export type InsertGoal = typeof goals.$inferInsert;
  */
 export const achievements = mysqlTable('achievements', {
   id: int('id').autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   userId: int('userId').notNull().references(() => users.id, { onDelete: "cascade" }),
   type: varchar('type', { length: 50 }).notNull(), // e.g., 'first_sale', 'shark'
   unlockedAt: timestamp('unlockedAt').defaultNow().notNull(),
@@ -742,6 +790,7 @@ export type Achievement = typeof achievements.$inferSelect;
  */
 export const internalMessages = mysqlTable('internal_messages', {
   id: int('id').autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   senderId: int('senderId').notNull().references(() => users.id, { onDelete: "cascade" }),
   recipientId: int('recipientId').references(() => users.id, { onDelete: "set null" }), // If NULL, it's a message to "General" channel
   content: text('content').notNull(),
@@ -757,6 +806,7 @@ export type InsertInternalMessage = typeof internalMessages.$inferInsert;
  */
 export const smtpConnections = mysqlTable("smtp_connections", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(), // e.g., "Gmail Ventas"
   host: varchar("host", { length: 255 }).notNull(), // e.g., smtp.gmail.com
   port: int("port").notNull(), // e.g., 587
@@ -780,37 +830,40 @@ export type InsertSmtpConnection = typeof smtpConnections.$inferInsert;
  * Tags for categorizing leads and conversations
  */
 export const tags = mysqlTable("tags", {
-    id: int("id").autoincrement().primaryKey(),
-    name: varchar("name", { length: 50 }).notNull(),
-    color: varchar("color", { length: 7 }).default("#3b82f6").notNull(), // hex color
-    description: text("description"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 50 }).notNull(),
+  color: varchar("color", { length: 7 }).default("#3b82f6").notNull(), // hex color
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => ({
-    uniqName: uniqueIndex("uniq_tag_name").on(t.name),
+  uniqName: uniqueIndex("uniq_tag_name").on(t.tenantId, t.name),
 }));
 
 export type Tag = typeof tags.$inferSelect;
 export type InsertTag = typeof tags.$inferInsert;
 
 export const leadTags = mysqlTable("lead_tags", {
-    id: int("id").autoincrement().primaryKey(),
-    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
-    tagId: int("tagId").notNull().references(() => tags.id, { onDelete: "cascade" }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  tagId: int("tagId").notNull().references(() => tags.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => ({
-    uniqLeadTag: uniqueIndex("uniq_lead_tag").on(t.leadId, t.tagId),
+  uniqLeadTag: uniqueIndex("uniq_lead_tag").on(t.tenantId, t.leadId, t.tagId),
 }));
 
 export type LeadTag = typeof leadTags.$inferSelect;
 export type InsertLeadTag = typeof leadTags.$inferInsert;
 
 export const conversationTags = mysqlTable("conversation_tags", {
-    id: int("id").autoincrement().primaryKey(),
-    conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-    tagId: int("tagId").notNull().references(() => tags.id, { onDelete: "cascade" }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  tagId: int("tagId").notNull().references(() => tags.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => ({
-    uniqConvTag: uniqueIndex("uniq_conv_tag").on(t.conversationId, t.tagId),
+  uniqConvTag: uniqueIndex("uniq_conv_tag").on(t.tenantId, t.conversationId, t.tagId),
 }));
 
 export type ConversationTag = typeof conversationTags.$inferSelect;
@@ -820,30 +873,32 @@ export type InsertConversationTag = typeof conversationTags.$inferInsert;
  * Notes and Tasks for leads
  */
 export const leadNotes = mysqlTable("lead_notes", {
-    id: int("id").autoincrement().primaryKey(),
-    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
-    content: text("content").notNull(),
-    createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type LeadNote = typeof leadNotes.$inferSelect;
 export type InsertLeadNote = typeof leadNotes.$inferInsert;
 
 export const leadTasks = mysqlTable("lead_tasks", {
-    id: int("id").autoincrement().primaryKey(),
-    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
-    title: varchar("title", { length: 200 }).notNull(),
-    description: text("description"),
-    dueDate: timestamp("dueDate"),
-    status: mysqlEnum("status", ["pending", "completed", "cancelled"]).default("pending").notNull(),
-    priority: mysqlEnum("priority", ["low", "medium", "high"]).default("medium").notNull(),
-    assignedToId: int("assignedToId").references(() => users.id, { onDelete: "set null" }),
-    createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
-    completedAt: timestamp("completedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description"),
+  dueDate: timestamp("dueDate"),
+  status: mysqlEnum("status", ["pending", "completed", "cancelled"]).default("pending").notNull(),
+  priority: mysqlEnum("priority", ["low", "medium", "high"]).default("medium").notNull(),
+  assignedToId: int("assignedToId").references(() => users.id, { onDelete: "set null" }),
+  createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type LeadTask = typeof leadTasks.$inferSelect;
@@ -853,12 +908,13 @@ export type InsertLeadTask = typeof leadTasks.$inferInsert;
  * AI Suggestions and Analysis
  */
 export const aiSuggestions = mysqlTable("ai_suggestions", {
-    id: int("id").autoincrement().primaryKey(),
-    conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-    suggestion: text("suggestion").notNull(),
-    context: text("context"), // JSON with message history used
-    used: boolean("used").default(false).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  suggestion: text("suggestion").notNull(),
+  context: text("context"), // JSON with message history used
+  used: boolean("used").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type AiSuggestion = typeof aiSuggestions.$inferSelect;
@@ -868,15 +924,16 @@ export type InsertAiSuggestion = typeof aiSuggestions.$inferInsert;
  * Chatbot Flows and Auto-responses
  */
 export const chatbotFlows = mysqlTable("chatbot_flows", {
-    id: int("id").autoincrement().primaryKey(),
-    name: varchar("name", { length: 100 }).notNull(),
-    trigger: mysqlEnum("trigger", ["keyword", "new_conversation", "no_match", "hours"]).notNull(),
-    triggerValue: varchar("triggerValue", { length: 200 }), // keyword or condition
-    responses: json("responses").$type<string[]>().notNull(), // array of possible responses
-    isActive: boolean("isActive").default(true).notNull(),
-    hoursOnly: boolean("hoursOnly").default(false).notNull(), // only outside business hours
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  trigger: mysqlEnum("trigger", ["keyword", "new_conversation", "no_match", "hours"]).notNull(),
+  triggerValue: varchar("triggerValue", { length: 200 }), // keyword or condition
+  responses: json("responses").$type<string[]>().notNull(), // array of possible responses
+  isActive: boolean("isActive").default(true).notNull(),
+  hoursOnly: boolean("hoursOnly").default(false).notNull(), // only outside business hours
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type ChatbotFlow = typeof chatbotFlows.$inferSelect;
@@ -886,27 +943,30 @@ export type InsertChatbotFlow = typeof chatbotFlows.$inferInsert;
  * Quotations/Quotes System
  */
 export const quotations = mysqlTable("quotations", {
-    id: int("id").autoincrement().primaryKey(),
-    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
-    conversationId: int("conversationId").references(() => conversations.id, { onDelete: "set null" }),
-    quoteNumber: varchar("quoteNumber", { length: 50 }).notNull().unique(),
-    title: varchar("title", { length: 200 }).notNull(),
-    description: text("description"),
-    items: json("items").$type<{name: string; quantity: number; unitPrice: number; total: number}[]>().notNull(),
-    subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
-    tax: decimal("tax", { precision: 12, scale: 2 }).default("0.00"),
-    total: decimal("total", { precision: 12, scale: 2 }).notNull(),
-    currency: varchar("currency", { length: 10 }).default("PYG").notNull(),
-    status: mysqlEnum("status", ["draft", "sent", "approved", "rejected", "expired"]).default("draft").notNull(),
-    validUntil: timestamp("validUntil"),
-    approvedAt: timestamp("approvedAt"),
-    rejectedAt: timestamp("rejectedAt"),
-    rejectionReason: text("rejectionReason"),
-    pdfUrl: varchar("pdfUrl", { length: 500 }),
-    createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  conversationId: int("conversationId").references(() => conversations.id, { onDelete: "set null" }),
+  quoteNumber: varchar("quoteNumber", { length: 50 }).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description"),
+  items: json("items").$type<{ name: string; quantity: number; unitPrice: number; total: number }[]>().notNull(),
+  subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+  tax: decimal("tax", { precision: 12, scale: 2 }).default("0.00"),
+  total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 10 }).default("PYG").notNull(),
+  status: mysqlEnum("status", ["draft", "sent", "approved", "rejected", "expired"]).default("draft").notNull(),
+  validUntil: timestamp("validUntil"),
+  approvedAt: timestamp("approvedAt"),
+  rejectedAt: timestamp("rejectedAt"),
+  rejectionReason: text("rejectionReason"),
+  pdfUrl: varchar("pdfUrl", { length: 500 }),
+  createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  uniqQuoteNumber: uniqueIndex("uniq_quote_number").on(t.tenantId, t.quoteNumber),
+}));
 
 export type Quotation = typeof quotations.$inferSelect;
 export type InsertQuotation = typeof quotations.$inferInsert;
@@ -915,18 +975,21 @@ export type InsertQuotation = typeof quotations.$inferInsert;
  * Forms/Surveys for lead capture
  */
 export const forms = mysqlTable("forms", {
-    id: int("id").autoincrement().primaryKey(),
-    name: varchar("name", { length: 100 }).notNull(),
-    slug: varchar("slug", { length: 100 }).notNull().unique(),
-    title: varchar("title", { length: 200 }),
-    description: text("description"),
-    fields: json("fields").$type<{name: string; label: string; type: string; required: boolean; options?: string[]}[]>().notNull(),
-    whatsappNumberId: int("whatsappNumberId").references(() => whatsappNumbers.id, { onDelete: "set null" }),
-    welcomeMessage: text("welcomeMessage"),
-    isActive: boolean("isActive").default(true).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull(),
+  title: varchar("title", { length: 200 }),
+  description: text("description"),
+  fields: json("fields").$type<{ name: string; label: string; type: string; required: boolean; options?: string[] }[]>().notNull(),
+  whatsappNumberId: int("whatsappNumberId").references(() => whatsappNumbers.id, { onDelete: "set null" }),
+  welcomeMessage: text("welcomeMessage"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  uniqFormSlug: uniqueIndex("uniq_form_slug").on(t.tenantId, t.slug),
+}));
 
 export type Form = typeof forms.$inferSelect;
 export type InsertForm = typeof forms.$inferInsert;
@@ -935,22 +998,23 @@ export type InsertForm = typeof forms.$inferInsert;
  * License / Subscription management
  */
 export const license = mysqlTable("license", {
-    id: int("id").autoincrement().primaryKey(),
-    key: varchar("key", { length: 255 }).notNull().unique(),
-    status: mysqlEnum("status", ["active", "expired", "canceled", "trial"]).default("trial").notNull(),
-    plan: varchar("plan", { length: 50 }).default("starter").notNull(), // starter, pro, enterprise
-    expiresAt: timestamp("expiresAt"),
-    maxUsers: int("maxUsers").default(5),
-    maxWhatsappNumbers: int("maxWhatsappNumbers").default(3),
-    maxMessagesPerMonth: int("maxMessagesPerMonth").default(10000),
-    features: json("features").$type<string[]>(), // e.g., ["api", "webhooks", "advanced_analytics"]
-    metadata: json("metadata").$type<{
-        stripeCustomerId?: string;
-        stripeSubscriptionId?: string;
-        paymentProvider?: 'stripe' | 'mercadopago';
-    }>(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  key: varchar("key", { length: 255 }).notNull().unique(),
+  status: mysqlEnum("status", ["active", "expired", "canceled", "trial"]).default("trial").notNull(),
+  plan: varchar("plan", { length: 50 }).default("starter").notNull(), // starter, pro, enterprise
+  expiresAt: timestamp("expiresAt"),
+  maxUsers: int("maxUsers").default(5),
+  maxWhatsappNumbers: int("maxWhatsappNumbers").default(3),
+  maxMessagesPerMonth: int("maxMessagesPerMonth").default(10000),
+  features: json("features").$type<string[]>(), // e.g., ["api", "webhooks", "advanced_analytics"]
+  metadata: json("metadata").$type<{
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    paymentProvider?: 'stripe' | 'mercadopago';
+  }>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type License = typeof license.$inferSelect;
@@ -960,45 +1024,48 @@ export type InsertLicense = typeof license.$inferInsert;
  * Monthly usage tracking for billing
  */
 export const usageTracking = mysqlTable("usage_tracking", {
-    id: int("id").autoincrement().primaryKey(),
-    year: int("year").notNull(),
-    month: int("month").notNull(), // 1-12
-    messagesSent: int("messagesSent").default(0),
-    messagesReceived: int("messagesReceived").default(0),
-    activeUsers: int("activeUsers").default(0),
-    activeWhatsappNumbers: int("activeWhatsappNumbers").default(0),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  year: int("year").notNull(),
+  month: int("month").notNull(), // 1-12
+  messagesSent: int("messagesSent").default(0),
+  messagesReceived: int("messagesReceived").default(0),
+  activeUsers: int("activeUsers").default(0),
+  activeWhatsappNumbers: int("activeWhatsappNumbers").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
-    uniqYearMonth: uniqueIndex("uniq_usage_year_month").on(t.year, t.month),
+  uniqYearMonth: uniqueIndex("uniq_usage_year_month").on(t.tenantId, t.year, t.month),
 }));
 
 /**
  * Webhooks for external integrations
  */
 export const webhooks = mysqlTable("webhooks", {
-    id: int("id").autoincrement().primaryKey(),
-    name: varchar("name", { length: 100 }).notNull(),
-    url: varchar("url", { length: 500 }).notNull(),
-    secret: varchar("secret", { length: 255 }).notNull(),
-    events: json("events").$type<string[]>().notNull(), // e.g., ["lead.created", "message.received"]
-    active: boolean("active").default(true).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  url: varchar("url", { length: 500 }).notNull(),
+  secret: varchar("secret", { length: 255 }).notNull(),
+  events: json("events").$type<string[]>().notNull(), // e.g., ["lead.created", "message.received"]
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Webhook = typeof webhooks.$inferSelect;
 export type InsertWebhook = typeof webhooks.$inferInsert;
 
 export const webhookDeliveries = mysqlTable("webhook_deliveries", {
-    id: int("id").autoincrement().primaryKey(),
-    webhookId: int("webhookId").notNull().references(() => webhooks.id, { onDelete: "cascade" }),
-    event: varchar("event", { length: 100 }).notNull(),
-    payload: text("payload").notNull(),
-    responseStatus: int("responseStatus"),
-    responseBody: text("responseBody"),
-    success: boolean("success").default(false).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  webhookId: int("webhookId").notNull().references(() => webhooks.id, { onDelete: "cascade" }),
+  event: varchar("event", { length: 100 }).notNull(),
+  payload: text("payload").notNull(),
+  responseStatus: int("responseStatus"),
+  responseBody: text("responseBody"),
+  success: boolean("success").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;

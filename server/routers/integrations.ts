@@ -6,7 +6,7 @@ import { permissionProcedure, router } from "../_core/trpc";
 import { assertSafeOutboundUrl } from "../_core/urlSafety";
 
 export const integrationsRouter = router({
-    list: permissionProcedure("integrations.view").query(async () => {
+    list: permissionProcedure("integrations.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
 
@@ -17,7 +17,7 @@ export const integrationsRouter = router({
 
     getById: permissionProcedure("integrations.view")
         .input(z.object({ id: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
 
@@ -43,7 +43,7 @@ export const integrationsRouter = router({
 
             await assertSafeOutboundUrl(input.webhookUrl);
 
-            const result = await db.insert(integrations).values({
+            const result = await db.insert(integrations).values({ tenantId: ctx.tenantId, 
                 ...input,
                 events: input.events ?? ['message_received', 'lead_created', 'lead_updated', 'campaign_sent'],
                 createdById: ctx.user?.id,
@@ -62,7 +62,7 @@ export const integrationsRouter = router({
             isActive: z.boolean().optional(),
             events: z.array(z.string()).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -80,7 +80,7 @@ export const integrationsRouter = router({
 
     delete: permissionProcedure("integrations.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -93,7 +93,7 @@ export const integrationsRouter = router({
             id: z.number(),
             isActive: z.boolean(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -106,7 +106,7 @@ export const integrationsRouter = router({
 
     testWebhook: permissionProcedure("integrations.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 

@@ -8,7 +8,7 @@ import { BaileysService } from "../services/baileys";
 
 export const whatsappRouter = router({
     list: permissionProcedure("settings.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -93,7 +93,7 @@ export const whatsappRouter = router({
             }
 
             // Create new whatsappNumber first
-            const [newNumber] = await db.insert(whatsappNumbers).values({
+            const [newNumber] = await db.insert(whatsappNumbers).values({ tenantId: ctx.tenantId, 
                 phoneNumber: input.phoneNumber,
                 displayName: input.displayName,
                 country: "Unknown", // Could extract from phone number
@@ -107,7 +107,7 @@ export const whatsappRouter = router({
             }).$returningId();
 
             // Create connection
-            const [newConnection] = await db.insert(whatsappConnections).values({
+            const [newConnection] = await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
                 whatsappNumberId: newNumber.id,
                 connectionType: "api",
                 phoneNumberId: input.phoneNumberId,
@@ -178,13 +178,13 @@ export const whatsappRouter = router({
         }),
 
     getStatus: permissionProcedure("settings.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
             return await db.select().from(whatsappConnections);
         }),
 
-    listTemplates: permissionProcedure("campaigns.view").query(async () => {
+    listTemplates: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
         // Get the first active connection with a businessAccountId

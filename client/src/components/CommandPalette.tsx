@@ -10,11 +10,11 @@ import {
     CommandSeparator,
 } from "@/components/ui/command";
 import { trpc } from "@/lib/trpc";
-import { 
-    Search, 
-    User, 
-    MessageSquare, 
-    LayoutGrid, 
+import {
+    Search,
+    User,
+    MessageSquare,
+    LayoutGrid,
     Settings,
     BarChart3,
     HelpCircle,
@@ -33,15 +33,15 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     const [, navigate] = useLocation();
     const [query, setQuery] = useState("");
-    
+
     // Search queries
     const { data: leads = [] } = trpc.leads.search.useQuery(
         { query: query.trim(), limit: 5 },
         { enabled: query.length >= 2 }
     );
-    
+
     const { data: conversations = [] } = trpc.chat.listConversations.useQuery(
-        { limit: 5, search: query.trim() },
+        { search: query.trim() },
         { enabled: query.length >= 2 }
     );
 
@@ -73,8 +73,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
     return (
         <CommandDialog open={open} onOpenChange={onOpenChange}>
-            <CommandInput 
-                placeholder="Buscar leads, conversaciones, o navegar..." 
+            <CommandInput
+                placeholder="Buscar leads, conversaciones, o navegar..."
                 value={query}
                 onValueChange={setQuery}
             />

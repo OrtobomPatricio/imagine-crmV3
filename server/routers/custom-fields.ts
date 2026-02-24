@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
 
 export const customFieldsRouter = router({
-    list: permissionProcedure("leads.view").query(async () => {
+    list: permissionProcedure("leads.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
         return db.select().from(customFieldDefinitions).orderBy(asc(customFieldDefinitions.order));
@@ -18,10 +18,10 @@ export const customFieldsRouter = router({
             options: z.array(z.string()).optional(),
             entityType: z.enum(["lead", "contact", "company"]).default("lead"),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.insert(customFieldDefinitions).values(input);
+            await db.insert(customFieldDefinitions).values({ tenantId: ctx.tenantId, ...input });
             return { success: true };
         }),
 
@@ -34,7 +34,7 @@ export const customFieldsRouter = router({
             entityType: z.enum(["lead", "contact", "company"]).optional(),
             isRequired: z.boolean().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             const { id, ...data } = input;
@@ -44,7 +44,7 @@ export const customFieldsRouter = router({
 
     delete: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.id, input.id));

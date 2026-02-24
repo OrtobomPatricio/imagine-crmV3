@@ -8,7 +8,7 @@ import { maskSecret, encryptSecret } from "../_core/crypto";
 export const whatsappConnectionsRouter = router({
     get: permissionProcedure("monitoring.view")
         .input(z.object({ whatsappNumberId: z.number() }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return null;
 
@@ -34,7 +34,7 @@ export const whatsappConnectionsRouter = router({
             phoneNumberId: z.string(),
             businessAccountId: z.string().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -62,7 +62,7 @@ export const whatsappConnectionsRouter = router({
                     })
                     .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId));
             } else {
-                await db.insert(whatsappConnections).values({
+                await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
                     whatsappNumberId: input.whatsappNumberId,
                     connectionType: 'api',
                     accessToken: encryptedToken,
@@ -93,7 +93,7 @@ export const whatsappConnectionsRouter = router({
                 .limit(1);
 
             if (!existing[0]) {
-                await db.insert(whatsappConnections).values({
+                await db.insert(whatsappConnections).values({ tenantId: ctx.tenantId, 
                     whatsappNumberId: input.whatsappNumberId,
                     connectionType: 'qr',
                     isConnected: false,
@@ -159,7 +159,7 @@ export const whatsappConnectionsRouter = router({
 
     disconnect: permissionProcedure("monitoring.manage")
         .input(z.object({ whatsappNumberId: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 

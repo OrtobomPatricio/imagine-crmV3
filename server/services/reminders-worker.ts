@@ -218,7 +218,7 @@ async function processDueReminders(): Promise<number> {
 
                         // Check if we should create next occurrence
                         if (!reminder.recurrenceEndDate || nextDate <= reminder.recurrenceEndDate) {
-                            await db.insert(leadReminders).values({
+                            await db.insert(leadReminders).values({ tenantId: 1, 
                                 leadId: reminder.leadId,
                                 conversationId: reminder.conversationId,
                                 createdById: reminder.createdById,

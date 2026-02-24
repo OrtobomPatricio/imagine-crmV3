@@ -91,9 +91,9 @@ export const MessageHandler = {
                 id: chatMessages.id,
                 conversationId: chatMessages.conversationId,
             })
-            .from(chatMessages)
-            .where(eq(chatMessages.whatsappMessageId, whatsappMessageId))
-            .limit(1);
+                .from(chatMessages)
+                .where(eq(chatMessages.whatsappMessageId, whatsappMessageId))
+                .limit(1);
 
             if (messages[0]) {
                 emitToConversation(messages[0].conversationId, "message:status", {
@@ -129,11 +129,11 @@ export const MessageHandler = {
         }
 
         const fromMe = message.key.fromMe;
-        
+
         // Handle location messages
         const locationMessage = message.message?.locationMessage;
         let locationData: { latitude?: number; longitude?: number; locationName?: string } | null = null;
-        
+
         if (locationMessage) {
             locationData = {
                 latitude: locationMessage.degreesLatitude,
@@ -141,7 +141,7 @@ export const MessageHandler = {
                 locationName: locationMessage.name || null,
             };
         }
-        
+
         const text = message.message?.conversation ||
             message.message?.extendedTextMessage?.text ||
             message.message?.imageMessage?.caption ||
@@ -209,6 +209,7 @@ export const MessageHandler = {
                 }
 
                 const [newLead] = await db.insert(leads).values({
+                    tenantId: 1,
                     name: contactName !== "Unknown" ? contactName : phoneNumber, // Helper if no name
                     phone: phoneNumber,
                     country: "Unknown",
@@ -266,6 +267,7 @@ export const MessageHandler = {
 
             } else {
                 const [newConv] = await db.insert(conversations).values({
+                    tenantId: 1,
                     channel: 'whatsapp',
                     whatsappNumberId: userId,
                     whatsappConnectionType: 'qr',
@@ -295,6 +297,7 @@ export const MessageHandler = {
             const media = await maybeDownloadMedia(inner, upsertType);
 
             const [inserted] = await db.insert(chatMessages).values({
+                tenantId: 1,
                 conversationId: conversationId,
                 whatsappNumberId: userId,
                 whatsappConnectionType: 'qr',
@@ -304,8 +307,8 @@ export const MessageHandler = {
                 mediaUrl: media.mediaUrl,
                 mediaName: media.mediaName,
                 mediaMimeType: media.mediaMimeType,
-                latitude: locationData?.latitude ?? null,
-                longitude: locationData?.longitude ?? null,
+                latitude: locationData?.latitude ? locationData.latitude.toString() : null,
+                longitude: locationData?.longitude ? locationData.longitude.toString() : null,
                 locationName: locationData?.locationName ?? null,
                 whatsappMessageId: message.key.id,
                 status: fromMe ? 'sent' : 'delivered', // Assume sent if from me in history

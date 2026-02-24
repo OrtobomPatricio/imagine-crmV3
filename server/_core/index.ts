@@ -339,7 +339,7 @@ async function ensureAppSettings() {
     const rows = await db.select().from(appSettings).limit(1);
     if (rows.length === 0) {
       logger.info("seed: appSettings empty, creating defaults");
-      await db.insert(appSettings).values({
+      await db.insert(appSettings).values({ tenantId: 1, 
         companyName: "Imagine Lab CRM",
         timezone: "America/Asuncion",
         language: "es",

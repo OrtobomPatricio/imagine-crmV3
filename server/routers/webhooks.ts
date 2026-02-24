@@ -18,7 +18,7 @@ function signPayload(payload: string, secret: string): string {
 export const webhooksRouter = router({
     // List webhooks
     list: permissionProcedure("settings.manage")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
             
@@ -43,12 +43,12 @@ export const webhooksRouter = router({
             ])).min(1),
             active: z.boolean().default(true),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
             const secret = generateSecret();
-            const result = await db.insert(webhooks).values({
+            const result = await db.insert(webhooks).values({ tenantId: ctx.tenantId, 
                 ...input,
                 secret,
             });
@@ -69,7 +69,7 @@ export const webhooksRouter = router({
             events: z.array(z.string()).optional(),
             active: z.boolean().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -82,7 +82,7 @@ export const webhooksRouter = router({
     // Delete webhook
     delete: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -93,7 +93,7 @@ export const webhooksRouter = router({
     // Regenerate secret
     regenerateSecret: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -111,7 +111,7 @@ export const webhooksRouter = router({
             webhookId: z.number(),
             limit: z.number().default(50),
         }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
             
@@ -125,7 +125,7 @@ export const webhooksRouter = router({
     // Test webhook
     test: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             
@@ -162,7 +162,7 @@ export const webhooksRouter = router({
                 
                 const responseBody = await response.text().catch(() => "");
                 
-                await db.insert(webhookDeliveries).values({
+                await db.insert(webhookDeliveries).values({ tenantId: ctx.tenantId, 
                     webhookId: input.id,
                     event: "test",
                     payload: body,
@@ -176,7 +176,7 @@ export const webhooksRouter = router({
                     status: response.status,
                 };
             } catch (error: any) {
-                await db.insert(webhookDeliveries).values({
+                await db.insert(webhookDeliveries).values({ tenantId: ctx.tenantId, 
                     webhookId: input.id,
                     event: "test",
                     payload: body,

@@ -19,7 +19,7 @@ export const internalChatRouter = router({
             const db = await getDb();
             if (!db || !ctx.user) throw new Error("Database not available");
 
-            await db.insert(internalMessages).values({
+            await db.insert(internalMessages).values({ tenantId: ctx.tenantId, 
                 senderId: ctx.user.id,
                 recipientId: input.recipientId ?? null,
                 content: input.content,

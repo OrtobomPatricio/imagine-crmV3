@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
 
 export const templatesRouter = router({
-    list: permissionProcedure("campaigns.view").query(async () => {
+    list: permissionProcedure("campaigns.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) return [];
         return db.select().from(templates).orderBy(desc(templates.createdAt));
@@ -14,7 +14,7 @@ export const templatesRouter = router({
     // Chat-friendly list: WhatsApp templates available to agents in the composer
     quickList: permissionProcedure("chat.send")
         .input(z.object({ search: z.string().optional() }).optional())
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return [];
             const q = input?.search?.trim();
@@ -48,10 +48,10 @@ export const templatesRouter = router({
                 type: z.string()
             })).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
-            await db.insert(templates).values(input);
+            await db.insert(templates).values({ tenantId: ctx.tenantId, ...input });
             return { success: true };
         }),
 
@@ -67,7 +67,7 @@ export const templatesRouter = router({
                 type: z.string()
             })).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
             await db.update(templates).set(input).where(eq(templates.id, input.id));
@@ -76,7 +76,7 @@ export const templatesRouter = router({
 
     delete: permissionProcedure("campaigns.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("DB error");
             await db.delete(templates).where(eq(templates.id, input.id));

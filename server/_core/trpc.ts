@@ -30,6 +30,7 @@ const requireUser = t.middleware(async opts => {
     ctx: {
       ...ctx,
       user: ctx.user,
+      tenantId: ctx.user.tenantId,
     },
   });
 });
@@ -79,13 +80,14 @@ function matchPermission(granted: string, required: string): boolean {
   return false;
 }
 
-async function loadPermissionsMatrix(): Promise<Record<string, string[]>> {
+async function loadPermissionsMatrix(tenantId: number): Promise<Record<string, string[]>> {
   const db = await getDb();
   if (!db) return DEFAULT_PERMISSIONS_MATRIX;
 
-  const existing = await db.select().from(appSettings).limit(1);
+  const existing = await db.select().from(appSettings).where(eq(appSettings.tenantId, tenantId)).limit(1);
   if (existing.length === 0) {
     await db.insert(appSettings).values({
+      tenantId,
       companyName: "Imagine Lab CRM",
       timezone: "America/Asuncion",
       language: "es",
@@ -99,10 +101,10 @@ async function loadPermissionsMatrix(): Promise<Record<string, string[]>> {
   return existing[0]?.permissionsMatrix ?? DEFAULT_PERMISSIONS_MATRIX;
 }
 
-async function hasPermission(role: string, required: string): Promise<boolean> {
+async function hasPermission(role: string, required: string, tenantId: number): Promise<boolean> {
   // Owner is god mode
   if (role === "owner") return true;
-  const matrix = await loadPermissionsMatrix();
+  const matrix = await loadPermissionsMatrix(tenantId);
   const grantedList = matrix[role] ?? [];
   return grantedList.some(p => matchPermission(p, required));
 }
@@ -123,11 +125,11 @@ export const permissionProcedure = (permission: string) =>
 
       const baseRole = (ctx.user as any).role ?? "agent";
       const customRole = (ctx.user as any).customRole as string | undefined;
-      
+
       console.log('[DEBUG] User:', ctx.user.openId, 'Role:', baseRole, 'Permission:', permission);
 
       // Load permissions matrix for validation
-      const matrix = await loadPermissionsMatrix();
+      const matrix = await loadPermissionsMatrix(ctx.user.tenantId);
 
       // CRITICAL: Use helper to prevent owner escalation via customRole
       const effectiveRole = computeEffectiveRole({
@@ -136,7 +138,7 @@ export const permissionProcedure = (permission: string) =>
         permissionsMatrix: matrix,
       });
 
-      const allowed = await hasPermission(effectiveRole, permission);
+      const allowed = await hasPermission(effectiveRole, permission, ctx.user.tenantId);
       if (!allowed) {
         throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
       }
@@ -145,6 +147,7 @@ export const permissionProcedure = (permission: string) =>
         ctx: {
           ...ctx,
           user: ctx.user,
+          tenantId: ctx.user.tenantId,
         },
       });
     })
@@ -162,6 +165,7 @@ export const adminProcedure = t.procedure.use(
       ctx: {
         ...ctx,
         user: ctx.user,
+        tenantId: ctx.user.tenantId,
       },
     });
   }),

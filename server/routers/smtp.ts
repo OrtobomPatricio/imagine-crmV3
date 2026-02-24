@@ -8,7 +8,7 @@ import { encryptSecret } from "../_core/crypto";
 
 export const smtpRouter = router({
     list: permissionProcedure("settings.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
             return await db.select().from(smtpConnections).orderBy(smtpConnections.createdAt);
@@ -25,7 +25,7 @@ export const smtpRouter = router({
             fromEmail: z.string().includes("@").optional(),
             fromName: z.string().max(100).optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -34,7 +34,7 @@ export const smtpRouter = router({
             // Let's encrypt it.
             const encryptedPass = encryptSecret(input.password);
 
-            const [result] = await db.insert(smtpConnections).values({
+            const [result] = await db.insert(smtpConnections).values({ tenantId: ctx.tenantId, 
                 ...input,
                 password: encryptedPass, // Storing encrypted
                 isActive: true,
@@ -48,7 +48,7 @@ export const smtpRouter = router({
 
     delete: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return { success: false };
 
@@ -58,7 +58,7 @@ export const smtpRouter = router({
 
     test: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
@@ -118,7 +118,7 @@ export const smtpRouter = router({
 
     setDefault: permissionProcedure("settings.manage")
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) return { success: false };
 
@@ -136,7 +136,7 @@ export const smtpRouter = router({
 
     verifySmtpTest: permissionProcedure("settings.manage")
         .input(z.object({ email: z.string().includes("@") }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
             const sent = await sendEmail({
                 to: input.email,
                 subject: "Test SMTP Connection - Imagine CRM",

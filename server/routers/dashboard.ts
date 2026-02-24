@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
 
 export const dashboardRouter = router({
-    getStats: permissionProcedure("dashboard.view").query(async () => {
+    getStats: permissionProcedure("dashboard.view").query(async ({ ctx }) => {
         const db = await getDb();
         if (!db) {
             return {
@@ -87,7 +87,7 @@ export const dashboardRouter = router({
     }),
 
     getPipelineFunnel: permissionProcedure("dashboard.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -113,7 +113,7 @@ export const dashboardRouter = router({
         }),
 
     getLeaderboard: permissionProcedure("dashboard.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -140,7 +140,7 @@ export const dashboardRouter = router({
         }),
 
     getUpcomingAppointments: permissionProcedure("dashboard.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
 
@@ -170,7 +170,7 @@ export const dashboardRouter = router({
         }),
 
     getRecentActivity: permissionProcedure("dashboard.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) return [];
 

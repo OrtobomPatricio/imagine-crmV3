@@ -44,7 +44,7 @@ export const backupRouter = router({
         }),
 
     exportLeadsCSV: permissionProcedure("leads.view")
-        .query(async () => {
+        .query(async ({ ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 

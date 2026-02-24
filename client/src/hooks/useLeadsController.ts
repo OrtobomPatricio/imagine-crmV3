@@ -149,7 +149,7 @@ export function useLeadsController() {
     const processedLeads = useMemo(() => {
         if (!leads) return [];
 
-        let filtered = (leads as Lead[]).filter(
+        let filtered = (leads as unknown as Lead[]).filter(
             (lead) =>
                 lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 lead.phone.includes(searchTerm) ||
