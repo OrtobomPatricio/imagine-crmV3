@@ -102,7 +102,7 @@ export async function createApp() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://maps.googleapis.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://maps.googleapis.com"],
         upgradeInsecureRequests: null,
         imgSrc: ["'self'", "data:", "blob:", "https://*.googleusercontent.com", "https://maps.gstatic.com", "https://*.whatsapp.net", "https://*.fbcdn.net", "https://*.cdninstagram.com", "https://*.wadata.net", "https://cdn.jsdelivr.net"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
