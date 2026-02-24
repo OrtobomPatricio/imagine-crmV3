@@ -3,7 +3,7 @@ import crypto from "crypto";
 import axios from "axios";
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { chatMessages, conversations, whatsappConnections } from "../../drizzle/schema";
+import { chatMessages, conversations, whatsappConnections, whatsappNumbers } from "../../drizzle/schema";
 import { normalizeContactPhone } from "../_core/phone";
 import { logger, safeError } from "../_core/logger";
 import { emitToConversation } from "../services/websocket";
@@ -149,6 +149,19 @@ export async function processMetaWebhookPayload(payload: any, _opts: { skipSigna
       const whatsappNumberId = conn[0].whatsappNumberId;
       const accessToken = decryptSecret(conn[0].accessToken) || "";
 
+      // ── CRITICAL: Resolve tenantId from whatsappNumbers ──
+      const [waNum] = await db
+        .select({ tenantId: whatsappNumbers.tenantId })
+        .from(whatsappNumbers)
+        .where(eq(whatsappNumbers.id, whatsappNumberId))
+        .limit(1);
+
+      if (!waNum?.tenantId) {
+        logger.error({ whatsappNumberId, phoneNumberId }, "[Webhook] CRITICAL: Cannot resolve tenantId for whatsappNumber");
+        continue;
+      }
+      const tenantId = waNum.tenantId;
+
       // Contact info (Meta includes contacts array for most message events)
       const contact = (Array.isArray(value.contacts) ? value.contacts[0] : undefined) as any;
       const waIdRaw = contact?.wa_id || msgs[0]?.from;
@@ -227,6 +240,7 @@ export async function processMetaWebhookPayload(payload: any, _opts: { skipSigna
           let conversationId = existing[0]?.id as number | undefined;
           if (!conversationId) {
             const ins = await db.insert(conversations).values({
+              tenantId, // ✅ FIXED: tenant isolation
               channel: "whatsapp",
               whatsappNumberId,
               whatsappConnectionType: "api",
@@ -245,18 +259,18 @@ export async function processMetaWebhookPayload(payload: any, _opts: { skipSigna
               .from(conversations)
               .where(eq(conversations.id, conversationId))
               .limit(1);
-            
+
             const updates: any = {
               lastMessageAt: ts,
               unreadCount: sql`${conversations.unreadCount} + 1`,
               whatsappConnectionType: "api",
             };
-            
+
             // Reopen closed ticket if user responds
             if (currentConv[0]?.ticketStatus === 'closed') {
               updates.ticketStatus = 'open';
             }
-            
+
             await db
               .update(conversations)
               .set(updates)
@@ -270,7 +284,7 @@ export async function processMetaWebhookPayload(payload: any, _opts: { skipSigna
             void downloadWhatsAppMedia(mediaId, accessToken).catch(() => undefined);
           }
 
-          
+
           // Media pipeline (Cloud API): convert mediaId -> binary -> /api/uploads/<file>
           let storedMediaUrl: string | null = mediaId;
           let storedMimeType: string | null = mimeType;
@@ -289,7 +303,8 @@ export async function processMetaWebhookPayload(payload: any, _opts: { skipSigna
               storedFilename = downloaded.filename || filename || saved.originalname;
             }
           }
-const [inserted] = await db.insert(chatMessages).values({
+          const [inserted] = await db.insert(chatMessages).values({
+            tenantId, // ✅ FIXED: tenant isolation
             conversationId,
             whatsappNumberId,
             whatsappConnectionType: "api",
