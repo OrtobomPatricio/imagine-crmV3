@@ -123,6 +123,8 @@ export const permissionProcedure = (permission: string) =>
 
       const baseRole = (ctx.user as any).role ?? "agent";
       const customRole = (ctx.user as any).customRole as string | undefined;
+      
+      console.log('[DEBUG] User:', ctx.user.openId, 'Role:', baseRole, 'Permission:', permission);
 
       // Load permissions matrix for validation
       const matrix = await loadPermissionsMatrix();

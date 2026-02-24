@@ -56,6 +56,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/node": "^10.38.0",
     "@sentry/react": "^10.38.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@tanstack/react-query": "^5.90.2",
     "@trpc/client": "^11.6.0",
     "@trpc/react-query": "^11.6.0",
@@ -108,6 +109,8 @@
     "react-resizable": "^3.0.5",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^2.15.2",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
     "streamdown": "^1.4.0",
     "superjson": "^1.13.3",
@@ -157,9 +160,6 @@
   },
   "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af",
   "pnpm": {
-    "patchedDependencies": {
-      "wouter@3.7.1": "patches/wouter@3.7.1.patch"
-    },
     "overrides": {
       "tailwindcss>nanoid": "3.3.7"
     }

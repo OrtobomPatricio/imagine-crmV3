@@ -10,6 +10,7 @@ import { sdk } from "../_core/sdk";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { sendEmail } from "../_core/email";
 import { getClientIp } from "../services/security";
+import { authRateLimit, clearRateLimit } from "../_core/trpc-rate-limit";
 
 export const authRouter = router({
     me: publicProcedure.query(opts => {
@@ -55,6 +56,16 @@ export const authRouter = router({
             const db = await getDb();
             if (!db) return { success: false, error: "Database not available" };
 
+            // Rate limiting por email e IP
+            const ip = getClientIp(ctx.req);
+            const rateLimitKey = `${input.email}:${ip}`;
+            
+            try {
+                await authRateLimit(rateLimitKey);
+            } catch (e: any) {
+                return { success: false, error: e.message };
+            }
+
             const user = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
             if (!user[0] || !user[0].password) {
                 return { success: false, error: "Invalid credentials" };
@@ -65,10 +76,13 @@ export const authRouter = router({
                 return { success: false, error: "Invalid credentials" };
             }
 
+            // Limpiar rate limit después de login exitoso
+            clearRateLimit(rateLimitKey, 'auth');
+
             const sessionToken = await sdk.createSessionToken(user[0].openId, {
                 name: user[0].name || "",
                 expiresInMs: ONE_YEAR_MS,
-                ipAddress: getClientIp(ctx.req),
+                ipAddress: ip,
                 userAgent: (ctx.req.headers["user-agent"] as string),
             });
 

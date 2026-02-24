@@ -57,6 +57,7 @@ import { CustomFieldsManager } from "@/components/CustomFieldsManager";
 import { AddFacebookDialog } from "@/components/AddFacebookDialog";
 import { FacebookPagesList } from "@/components/FacebookPagesList";
 import { SecurityConfigEditor } from "@/components/SecurityConfigEditor";
+import { BillingSettings } from "@/components/settings/BillingSettings";
 
 const TZ_OPTIONS = [
   "America/Asuncion",
@@ -278,7 +279,7 @@ function SettingsContent() {
   useEffect(() => {
     const params = new URLSearchParams(search);
     const tab = params.get("tab");
-    if (tab && ["general", "team", "dashboard", "distribution", "security", "sla", "storage", "customFields", "sales"].includes(tab)) {
+    if (tab && ["general", "team", "dashboard", "distribution", "security", "sla", "storage", "customFields", "sales", "billing"].includes(tab)) {
       setActiveTab(tab);
     }
 
@@ -317,7 +318,7 @@ function SettingsContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full h-auto grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-y-2">
+        <TabsList className="grid w-full h-auto grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-y-2">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="team">Usuarios</TabsTrigger>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
@@ -326,6 +327,7 @@ function SettingsContent() {
           <TabsTrigger value="security">Seguridad</TabsTrigger>
           <TabsTrigger value="storage">Almacenamiento</TabsTrigger>
           <TabsTrigger value="customFields">Campos</TabsTrigger>
+          <TabsTrigger value="billing">Facturación</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-4">
@@ -759,6 +761,10 @@ function SettingsContent() {
 
         <TabsContent value="customFields" className="space-y-4">
           <CustomFieldsManager />
+        </TabsContent>
+
+        <TabsContent value="billing" className="space-y-4">
+          <BillingSettings />
         </TabsContent>
 
       </Tabs>

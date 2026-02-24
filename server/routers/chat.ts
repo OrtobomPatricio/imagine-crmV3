@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc, and, sql, or, like, asc, gt, lt } from "drizzle-orm";
+import { eq, desc, and, sql, or, like, asc, gt, lt, inArray } from "drizzle-orm";
 import { conversations, chatMessages, whatsappConnections, whatsappNumbers, facebookPages } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -9,6 +9,10 @@ import { distributeConversation } from "../services/distribution";
 import { dispatchIntegrationEvent } from "../_core/integrationDispatch";
 import { sendFacebookMessage } from "../_core/facebook";
 import { sendCloudTemplate, sendCloudMessage } from "../whatsapp/cloud";
+import { emitToConversation } from "../services/websocket";
+import { BaileysService } from "../services/baileys";
+import path from "path";
+import fs from "fs";
 
 export const chatRouter = router({
     getOrCreateByLeadId: permissionProcedure("chat.view")
@@ -107,6 +111,7 @@ export const chatRouter = router({
                 .optional()
         )
         .query(async ({ input, ctx }) => {
+            try {
             const db = await getDb();
             if (!db) return [];
 
@@ -139,34 +144,8 @@ export const chatRouter = router({
                 whereClause = whereClause ? and(whereClause, f) : f;
             }
 
-            const lastMessagePreview = sql<string | null>`(
-                select cm.content from chat_messages cm
-                where cm.conversationId = ${conversations.id}
-                order by cm.id desc
-                limit 1
-            )`;
-            const lastMessageDirection = sql<string | null>`(
-                select cm.direction from chat_messages cm
-                where cm.conversationId = ${conversations.id}
-                order by cm.id desc
-                limit 1
-            )`;
-            const lastMessageType = sql<string | null>`(
-                select cm.messageType from chat_messages cm
-                where cm.conversationId = ${conversations.id}
-                order by cm.id desc
-                limit 1
-            )`;
-            const lastMessageMediaName = sql<string | null>`(
-                select cm.mediaName from chat_messages cm
-                where cm.conversationId = ${conversations.id}
-                order by cm.id desc
-                limit 1
-            )`;
-
-            // Drizzle requires strict undefined check logic if we want to chain .where optionally, 
-            // but the cleanest way is calling .where() once.
-            const query = db
+            // Build base query without subqueries for better compatibility
+            let query = db
                 .select({
                     id: conversations.id,
                     channel: conversations.channel,
@@ -185,23 +164,60 @@ export const chatRouter = router({
                     status: conversations.status,
                     createdAt: conversations.createdAt,
                     updatedAt: conversations.updatedAt,
-                    lastMessagePreview,
-                    lastMessageDirection,
-                    lastMessageType,
-                    lastMessageMediaName,
                 })
                 .from(conversations);
 
-            if (whereClause) query.where(whereClause);
+            if (whereClause) {
+                query = query.where(whereClause) as typeof query;
+            }
 
             const sort = input?.sort || "recent";
             if (sort === "oldest") {
-                return query.orderBy(asc(conversations.lastMessageAt));
+                query = query.orderBy(asc(conversations.lastMessageAt)) as typeof query;
+            } else if (sort === "unread") {
+                query = query.orderBy(desc(conversations.unreadCount), desc(conversations.lastMessageAt)) as typeof query;
+            } else {
+                query = query.orderBy(desc(conversations.lastMessageAt)) as typeof query;
             }
-            if (sort === "unread") {
-                return query.orderBy(desc(conversations.unreadCount), desc(conversations.lastMessageAt));
+
+            const convs = await query;
+
+            // Get last message info for each conversation in a single query
+            if (convs.length === 0) return [];
+
+            const convIds = convs.map(c => c.id);
+            const lastMessages = await db
+                .select({
+                    conversationId: chatMessages.conversationId,
+                    content: chatMessages.content,
+                    direction: chatMessages.direction,
+                    messageType: chatMessages.messageType,
+                    mediaName: chatMessages.mediaName,
+                })
+                .from(chatMessages)
+                .where(inArray(chatMessages.conversationId, convIds))
+                .orderBy(desc(chatMessages.id));
+
+            // Map last messages to conversations
+            const lastMsgMap = new Map();
+            for (const msg of lastMessages) {
+                if (!lastMsgMap.has(msg.conversationId)) {
+                    lastMsgMap.set(msg.conversationId, msg);
+                }
             }
-            return query.orderBy(desc(conversations.lastMessageAt));
+
+            // Combine results
+            return convs.map(conv => ({
+                ...conv,
+                lastMessagePreview: lastMsgMap.get(conv.id)?.content ?? null,
+                lastMessageDirection: lastMsgMap.get(conv.id)?.direction ?? null,
+                lastMessageType: lastMsgMap.get(conv.id)?.messageType ?? null,
+                lastMessageMediaName: lastMsgMap.get(conv.id)?.mediaName ?? null,
+            }));
+            } catch (error: any) {
+                console.error("[listConversations] Error:", error.message);
+                throw error;
+            }
         }),
 
     getMessages: permissionProcedure("chat.view")
@@ -438,10 +454,23 @@ export const chatRouter = router({
 
             const id = insertRes[0].insertId as number;
 
-            // Update conversation lastMessageAt
+            // Update conversation lastMessageAt and auto-open ticket if pending
             await db.update(conversations)
-                .set({ lastMessageAt: now })
+                .set({ 
+                    lastMessageAt: now,
+                    ticketStatus: sql`CASE WHEN ${conversations.ticketStatus} = 'pending' THEN 'open' ELSE ${conversations.ticketStatus} END`
+                })
                 .where(eq(conversations.id, input.conversationId));
+
+            // Emit WebSocket event for real-time updates
+            console.log(`[WebSocket] Emitting message:new for conversation ${input.conversationId}, message ${id}`);
+            emitToConversation(input.conversationId, "message:new", {
+                id,
+                conversationId: input.conversationId,
+                content: input.content ?? (input.templateName ? `Template: ${input.templateName}` : ""),
+                fromMe: true,
+                createdAt: now,
+            });
 
             if (isFacebook) {
                 // --- FACEBOOK SEND LOGIC ---
@@ -499,7 +528,7 @@ export const chatRouter = router({
                     throw err;
                 }
             } else {
-                // --- WHATSAPP SEND LOGIC (QUEUED) ---
+                // --- WHATSAPP SEND LOGIC (SYNCHRONOUS) ---
                 const whatsappNumberId = input.whatsappNumberId || conv.whatsappNumberId;
                 if (!whatsappNumberId) {
                     await db.update(chatMessages)
@@ -508,33 +537,112 @@ export const chatRouter = router({
                     throw new Error("Falta whatsappNumberId");
                 }
 
-                // Lookup WhatsApp API connection
+                // Lookup WhatsApp connection
                 const connRows = await db.select()
                     .from(whatsappConnections)
                     .where(eq(whatsappConnections.whatsappNumberId, whatsappNumberId))
                     .limit(1);
                 const conn = connRows[0];
 
-                // Update connection type if needed
-                if (conn?.connectionType) {
-                    if (!conv.whatsappConnectionType) {
-                        await db.update(conversations)
-                            .set({ whatsappConnectionType: conn.connectionType as any })
-                            .where(eq(conversations.id, conv.id));
-                    }
+                if (!conn) {
+                    await db.update(chatMessages)
+                        .set({ status: 'failed', errorMessage: "WhatsApp no configurado", failedAt: now })
+                        .where(eq(chatMessages.id, id));
+                    throw new Error("WhatsApp no configurado para este número");
                 }
 
-                // Insert into Outbound Queue
-                const { messageQueue } = await import("../../drizzle/schema");
-                await db.insert(messageQueue).values({
-                    conversationId: input.conversationId,
-                    chatMessageId: id,
-                    priority: 0,
-                    status: 'queued',
-                    attempts: 0,
-                });
+                // Update connection type in conversation if needed
+                if (!conv.whatsappConnectionType && conn.connectionType) {
+                    await db.update(conversations)
+                        .set({ whatsappConnectionType: conn.connectionType as any })
+                        .where(eq(conversations.id, conv.id));
+                }
 
-                return { id, success: true, queued: true };
+                // Send based on connection type
+                try {
+                    if (conn.connectionType === 'qr') {
+                        // --- BAILEYS (QR) SEND ---
+                        const baileysSocket = BaileysService.getSocket(whatsappNumberId);
+                        if (!baileysSocket) {
+                            throw new Error("Baileys no está conectado. Escanea el QR primero.");
+                        }
+
+                        // Format phone number for Baileys
+                        const phoneNumber = conv.contactPhone.replace(/[^0-9]/g, '');
+                        const jid = `${phoneNumber}@s.whatsapp.net`;
+
+                        // Resolve file path from mediaUrl
+                        let filePath: string | null = null;
+                        if (input.mediaUrl) {
+                            // Extract filename from URL (e.g., /api/uploads/filename -> filename)
+                            const filename = path.basename(input.mediaUrl);
+                            filePath = path.join(process.cwd(), "storage/uploads", filename);
+                            
+                            // Verify file exists
+                            if (!fs.existsSync(filePath)) {
+                                throw new Error(`Archivo no encontrado: ${filePath}`);
+                            }
+                        }
+
+                        let baileysContent: any;
+                        if (input.messageType === 'text') {
+                            baileysContent = { text: input.content || '' };
+                        } else if (input.messageType === 'image' && filePath) {
+                            baileysContent = { image: { url: filePath }, caption: input.content || '' };
+                        } else if (input.messageType === 'document' && filePath) {
+                            baileysContent = { document: { url: filePath }, fileName: input.mediaName || 'document' };
+                        } else if (input.messageType === 'audio' && filePath) {
+                            baileysContent = { audio: { url: filePath }, ptt: true };
+                        } else {
+                            throw new Error(`Tipo de mensaje no soportado para Baileys: ${input.messageType}`);
+                        }
+
+                        const result = await BaileysService.sendMessage(whatsappNumberId, jid, baileysContent);
+
+                        await db.update(chatMessages)
+                            .set({
+                                status: 'sent',
+                                whatsappMessageId: result?.key?.id || null,
+                                sentAt: now,
+                            })
+                            .where(eq(chatMessages.id, id));
+
+                        return { id, success: true, sent: true, via: 'baileys' };
+
+                    } else if (conn.connectionType === 'api') {
+                        // --- CLOUD API SEND ---
+                        if (!conn.accessToken || !conn.phoneNumberId) {
+                            throw new Error("WhatsApp Cloud API no configurado correctamente");
+                        }
+
+                        const accessToken = decryptSecret(conn.accessToken) || conn.accessToken;
+                        const result = await sendCloudMessage({
+                            accessToken,
+                            phoneNumberId: conn.phoneNumberId,
+                            to: conv.contactPhone,
+                            message: input.messageType === 'text' 
+                                ? { type: 'text', text: input.content || '' }
+                                : { type: input.messageType, mediaUrl: input.mediaUrl }
+                        });
+
+                        await db.update(chatMessages)
+                            .set({
+                                status: 'sent',
+                                whatsappMessageId: result.messageId,
+                                sentAt: now,
+                            })
+                            .where(eq(chatMessages.id, id));
+
+                        return { id, success: true, sent: true, via: 'cloud-api' };
+                    } else {
+                        throw new Error(`Tipo de conexión no soportado: ${conn.connectionType}`);
+                    }
+                } catch (err: any) {
+                    await db.update(chatMessages)
+                        .set({ status: 'failed', errorMessage: err.message, failedAt: now })
+                        .where(eq(chatMessages.id, id));
+                    throw err;
+                }
             }
         }),
 
@@ -543,45 +651,57 @@ export const chatRouter = router({
             whatsappNumberId: z.number().optional(),
             facebookPageId: z.number().optional(),
             contactPhone: z.string(),
-            contactName: z.string().optional(),
-            leadId: z.number().optional(),
+            contactName: z.string().nullish(),
+            leadId: z.number().nullish(),
         }))
         .mutation(async ({ input }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
+            console.log("[CreateConversation] Input:", JSON.stringify(input));
+
             const channel = input.facebookPageId ? 'facebook' : 'whatsapp';
 
             // Validate required ID based on channel
             if (channel === 'whatsapp' && !input.whatsappNumberId) {
+                console.error("[CreateConversation] Missing whatsappNumberId");
                 throw new Error("Falta whatsappNumberId");
             }
             if (channel === 'facebook' && !input.facebookPageId) {
+                console.error("[CreateConversation] Missing facebookPageId");
                 throw new Error("Falta facebookPageId");
             }
 
-            const normalizedContactPhone = channel === 'whatsapp' ? normalizeContactPhone(input.contactPhone) : input.contactPhone;
-
-            const result = await db.insert(conversations).values({
-                channel,
-                whatsappNumberId: input.whatsappNumberId ?? null,
-                facebookPageId: input.facebookPageId ?? null,
-                contactPhone: normalizedContactPhone,
-                contactName: input.contactName,
-                leadId: input.leadId,
-                lastMessageAt: new Date(),
-                status: 'active',
-            } as any);
-
-            const newConvId = result[0].insertId;
-
-            // Attempt distribution
             try {
-                await distributeConversation(newConvId);
-            } catch (e) {
-                console.error("[CreateConversation] Distribution failed", e);
-            }
+                const normalizedContactPhone = channel === 'whatsapp' ? normalizeContactPhone(input.contactPhone) : input.contactPhone;
 
-            return { id: newConvId, success: true };
+                console.log("[CreateConversation] Creating with phone:", normalizedContactPhone);
+
+                const result = await db.insert(conversations).values({
+                    channel,
+                    whatsappNumberId: input.whatsappNumberId ?? null,
+                    facebookPageId: input.facebookPageId ?? null,
+                    contactPhone: normalizedContactPhone,
+                    contactName: input.contactName,
+                    leadId: input.leadId,
+                    lastMessageAt: new Date(),
+                    status: 'active',
+                } as any);
+
+                const newConvId = result[0].insertId;
+                console.log("[CreateConversation] Created:", newConvId);
+
+                // Attempt distribution
+                try {
+                    await distributeConversation(newConvId);
+                } catch (e) {
+                    console.error("[CreateConversation] Distribution failed", e);
+                }
+
+                return { id: newConvId, success: true };
+            } catch (error: any) {
+                console.error("[CreateConversation] Error:", error);
+                throw new Error(`Error al crear conversación: ${error.message}`);
+            }
         }),
 });

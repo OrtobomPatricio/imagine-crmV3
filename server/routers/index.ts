@@ -25,6 +25,11 @@ import { smtpRouter } from "./smtp";
 import { schedulingRouter } from "./scheduling";
 import { customFieldsRouter } from "./custom-fields";
 import { helpdeskRouter } from "./helpdesk";
+import { licensingRouter } from "./licensing";
+import { tagsRouter } from "./tags";
+import { notesTasksRouter } from "./notes-tasks";
+import { webhooksRouter } from "./webhooks";
+import { leadRemindersRouter } from "./lead-reminders";
 
 export const appRouter = router({
     system: systemRouter,
@@ -55,6 +60,11 @@ export const appRouter = router({
     scheduling: schedulingRouter,
     customFields: customFieldsRouter,
     helpdesk: helpdeskRouter,
+    licensing: licensingRouter,
+    tags: tagsRouter,
+    notesTasks: notesTasksRouter,
+    webhooks: webhooksRouter,
+    leadReminders: leadRemindersRouter,
 });
 
 export type AppRouter = typeof appRouter;

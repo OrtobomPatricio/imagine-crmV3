@@ -163,13 +163,32 @@ export const whatsappConnectionsRouter = router({
             const db = await getDb();
             if (!db) throw new Error("Database not available");
 
+            // 1. Disconnect Baileys socket if QR connection
+            try {
+                const { BaileysService } = await import("../services/baileys");
+                await BaileysService.disconnect(input.whatsappNumberId);
+                console.log(`[WhatsApp Disconnect] Baileys session disconnected for number ${input.whatsappNumberId}`);
+            } catch (err) {
+                // Log but don't fail - socket might not exist
+                console.warn(`[WhatsApp Disconnect] Baileys disconnect warning for ${input.whatsappNumberId}:`, err);
+            }
+
+            // 2. Clear QR code and connection status in DB
             await db.update(whatsappConnections)
-                .set({ isConnected: false })
+                .set({ 
+                    isConnected: false, 
+                    qrCode: null,
+                    qrExpiresAt: null,
+                    sessionData: null,
+                })
                 .where(eq(whatsappConnections.whatsappNumberId, input.whatsappNumberId));
 
+            // 3. Mark whatsapp number as disconnected
             await db.update(whatsappNumbers)
                 .set({ isConnected: false, status: 'disconnected' })
                 .where(eq(whatsappNumbers.id, input.whatsappNumberId));
+
+            console.log(`[WhatsApp Disconnect] Number ${input.whatsappNumberId} marked as disconnected in database`);
 
             return { success: true };
         }),

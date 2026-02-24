@@ -21,12 +21,19 @@ import { startCampaignWorker } from "../services/campaign-worker";
 import { startLogCleanup } from "../services/cleanup-logs";
 import { startAutoBackup } from "../services/auto-backup";
 import { startSessionCleanup } from "../services/cleanup-sessions";
+import { startTicketStatusWorker } from "../services/ticket-status-worker";
+import { startRemindersWorker } from "../services/reminders-worker";
 import { runMigrations } from "../scripts/migrate";
 import { validateProductionSecrets } from "./validate-env";
 import { assertDbConstraints } from "../services/assert-db";
 import { assertEnv } from "./assert-env";
 import { logger, safeError } from "./logger";
 import { registerTestRoutes } from "./test-routes";
+import { initWebSocket } from "../services/websocket";
+import { validateEnvironment } from "./env-validation";
+
+// Validate environment variables before starting
+validateEnvironment();
 
 // Modular Imports
 import { requireAuthMiddleware } from "./middleware/auth";
@@ -272,6 +279,10 @@ async function startServer() {
   }
 
   const httpServer = createServer(app);
+  
+  // Initialize WebSocket server
+  await initWebSocket(httpServer);
+  
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info({ port }, "server listening");
 
@@ -281,6 +292,8 @@ async function startServer() {
     startLogCleanup();
     startAutoBackup();
     startSessionCleanup();
+    startTicketStatusWorker();
+    startRemindersWorker();
     // Start Message Queue Worker
     import("../services/queue-worker").then(({ MessageQueueWorker }) => {
       MessageQueueWorker.getInstance().start();

@@ -1,11 +1,12 @@
 import { ChatList } from "@/components/chat/ChatList";
 import { ChatThread } from "@/components/chat/ChatThread";
-
+import { NewConversationDialog } from "@/components/chat/NewConversationDialog";
 import { ChatLeadDetails } from "@/components/chat/ChatLeadDetails";
 import { ChatActionsMenu } from "@/components/chat/ChatActionsMenu";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, ArrowLeft } from "lucide-react";
+import { Search, ArrowLeft, Wifi, WifiOff } from "lucide-react";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { useLocation } from "wouter";
 import { useChatController, type ChatSortOption } from "@/hooks/useChatController";
 import {
@@ -53,6 +54,7 @@ import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
   const [location, setLocation] = useLocation();
+  const { isConnected: isWsConnected } = useWebSocket();
 
   const {
     selectedConversationId,
@@ -84,9 +86,25 @@ export default function ChatPage() {
         selectedConversationId ? "hidden md:flex" : "flex"
       )}>
         <div className="p-3 border-b border-border/50 bg-muted/30 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold tracking-tight">Mensajes</h2>
-            <ChannelSelector value={selectedWhatsappNumberId} onChange={setSelectedWhatsappNumberId} />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold tracking-tight">Mensajes</h2>
+              {/* WebSocket Connection Indicator - Compact */}
+              <div 
+                className={`flex items-center justify-center w-6 h-6 rounded-full ${
+                  isWsConnected 
+                    ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" 
+                    : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                }`}
+                title={isWsConnected ? "Conectado en tiempo real" : "Desconectado"}
+              >
+                {isWsConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <NewConversationDialog onConversationCreated={setSelectedConversationId} />
+              <ChannelSelector value={selectedWhatsappNumberId} onChange={setSelectedWhatsappNumberId} />
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -201,7 +219,7 @@ export default function ChatPage() {
       {/* Right: Lead Details (Collapsible) */}
       {selectedConversationId && showDetails && (
         <div className={cn(
-          "hidden lg:block w-80 shrink-0 animate-in fade-in slide-in-from-right-4 duration-300",
+          "hidden lg:block w-96 shrink-0 animate-in fade-in slide-in-from-right-4 duration-300",
           "h-full" // Ensure it takes full height of parent
         )}>
           {selectedConversation && selectedConversation.leadId ? (

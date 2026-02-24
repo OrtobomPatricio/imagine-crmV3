@@ -7,6 +7,7 @@ import { FileText, Paperclip, Send, MapPin, X, ArrowDown, RefreshCw, Loader2, Ch
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useConversationWebSocket } from "@/hooks/useWebSocket";
 import { ChatQuickReplies } from "@/components/chat/ChatQuickReplies";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -93,6 +94,10 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   // Typing indicator (simulated client-side for now)
   const [isContactTyping, setIsContactTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // WebSocket integration
+  const { on: onWsEvent, sendTyping: sendTypingIndicator, markAsRead: markAsReadWS, isConnected: isWsConnected } = useConversationWebSocket(conversationId);
 
   const onEmojiClick = (emojiData: EmojiClickData) => {
     setMessage((prev) => prev + emojiData.emoji);
@@ -125,8 +130,9 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
     { conversationId, limit: 50 },
     {
       getNextPageParam: (lastPage: any) => lastPage.nextCursor ?? undefined,
-      refetchInterval: 3000,
-      refetchIntervalInBackground: true,
+      // Only use polling as fallback when WebSocket is disconnected
+      refetchInterval: isWsConnected ? false : 5000,
+      refetchIntervalInBackground: !isWsConnected,
     }
   );
 
@@ -175,7 +181,16 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
     // Fix: Access items correctly based on return type structure
     const pages = messagesQuery.data?.pages || [];
     const list = pages.flatMap((p: any) => p.items || []) ?? [];
-    return [...list].sort((a: any, b: any) => {
+    
+    // Remove duplicates by ID (prevents double rendering)
+    const uniqueMessages = new Map();
+    list.forEach((msg: any) => {
+      if (msg.id && !uniqueMessages.has(msg.id)) {
+        uniqueMessages.set(msg.id, msg);
+      }
+    });
+    
+    return [...uniqueMessages.values()].sort((a: any, b: any) => {
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   }, [messagesQuery.data]);
@@ -204,12 +219,70 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
     };
   }, [conversationId]);
 
+  // Track processed message IDs to prevent duplicates
+  const processedMessageIds = useRef<Set<number>>(new Set());
+
+  // WebSocket event handlers
+  useEffect(() => {
+    console.log("[ChatThread] Setting up WebSocket listeners for conversation", conversationId);
+    
+    // Listen for new messages
+    const unsubNewMessage = onWsEvent("message:new", (data) => {
+      console.log("[ChatThread] Received message:new event:", data);
+      
+      // Deduplication: skip if we already processed this message ID
+      if (data.id && processedMessageIds.current.has(data.id)) {
+        console.log("[ChatThread] Skipping duplicate message:", data.id);
+        return;
+      }
+      
+      // Mark as processed
+      if (data.id) {
+        processedMessageIds.current.add(data.id);
+        // Clean up old IDs after 100 messages to prevent memory leak
+        if (processedMessageIds.current.size > 100) {
+          const firstId = processedMessageIds.current.values().next().value;
+          processedMessageIds.current.delete(firstId);
+        }
+      }
+      
+      // Invalidate messages to refresh
+      utils.chat.getMessages.invalidate({ conversationId, limit: 50 });
+      utils.chat.listConversations.invalidate();
+      
+      // Play notification sound if not from me
+      if (!data.fromMe) {
+        // Optional: play sound
+      }
+    });
+
+    // Listen for typing indicators
+    const unsubTyping = onWsEvent("conversation:typing", (data) => {
+      if (data.conversationId === conversationId) {
+        setIsContactTyping(data.isTyping);
+      }
+    });
+
+    // Listen for message status updates
+    const unsubStatus = onWsEvent("message:status", (data) => {
+      utils.chat.getMessages.invalidate({ conversationId, limit: 50 });
+    });
+
+    return () => {
+      unsubNewMessage?.();
+      unsubTyping?.();
+      unsubStatus?.();
+    };
+  }, [onWsEvent, conversationId, utils]);
+
   // On conversation change: mark read + go bottom once messages load
   useEffect(() => {
     prevLenRef.current = 0;
     setUnseenCount(0);
     setIsAtBottom(true);
+    processedMessageIds.current.clear(); // Clear processed IDs when changing conversation
     markAsRead.mutate({ conversationId });
+    markAsReadWS();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
@@ -237,7 +310,11 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   };
 
   const updateQueueItem = (id: string, patch: Partial<SendQueueItem>) => {
-    setSendQueue((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    setSendQueue((prev) => {
+      const updated = prev.map((it) => (it.id === id ? { ...it, ...patch } : it));
+      sendQueueRef.current = updated; // Sync ref immediately
+      return updated;
+    });
   };
 
   // Keep a lightweight tick only when needed (countdown + button labels)
@@ -336,7 +413,11 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   }, [sendQueue.length]);
 
   const enqueueMessages = (items: SendQueueItem[]) => {
-    setSendQueue((prev) => [...prev, ...items]);
+    setSendQueue((prev) => {
+      const updated = [...prev, ...items];
+      sendQueueRef.current = updated; // Sync ref immediately
+      return updated;
+    });
   };
 
   const handleSendMessage = () => {
@@ -396,6 +477,27 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
       scrollToBottom("smooth");
     }, 50);
   };
+
+  // Send typing indicator
+  useEffect(() => {
+    if (message.trim()) {
+      sendTypingIndicator(true);
+      
+      // Clear previous timeout
+      if (typingTimeout) clearTimeout(typingTimeout);
+      
+      // Set new timeout to stop typing after 3 seconds of inactivity
+      const timeout = setTimeout(() => {
+        sendTypingIndicator(false);
+      }, 3000);
+      setTypingTimeout(timeout);
+    }
+    
+    return () => {
+      if (typingTimeout) clearTimeout(typingTimeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [message]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -826,7 +928,13 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              onClick={() => setSendQueue((prev) => prev.filter((x) => x.id !== q.id))}
+                              onClick={() => {
+                                setSendQueue((prev) => {
+                                  const updated = prev.filter((x) => x.id !== q.id);
+                                  sendQueueRef.current = updated;
+                                  return updated;
+                                });
+                              }}
                             >
                               <X className="h-4 w-4" />
                             </Button>

@@ -576,6 +576,54 @@ export type MessageQueueItem = typeof messageQueue.$inferSelect;
 export type InsertMessageQueueItem = typeof messageQueue.$inferInsert;
 
 /**
+ * Scheduled Reminders for Leads
+ * Allows scheduling WhatsApp messages with interactive buttons
+ */
+export const leadReminders = mysqlTable("lead_reminders", {
+  id: int("id").autoincrement().primaryKey(),
+  leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  conversationId: int("conversationId").references(() => conversations.id, { onDelete: "cascade" }),
+  createdById: int("createdById").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // Scheduling
+  scheduledAt: timestamp("scheduledAt").notNull(), // When to send
+  timezone: varchar("timezone", { length: 50 }).default("America/Asuncion"),
+  
+  // Message content
+  message: text("message").notNull(),
+  messageType: mysqlEnum("messageType", ["text", "image", "document", "template"]).default("text"),
+  mediaUrl: varchar("mediaUrl", { length: 500 }),
+  mediaName: varchar("mediaName", { length: 200 }),
+  
+  // Interactive buttons (JSON array of button options)
+  buttons: json("buttons"), // [{ id: string, text: string }, ...]
+  
+  // Status tracking
+  status: mysqlEnum("status", ["scheduled", "sent", "failed", "cancelled"]).default("scheduled"),
+  sentAt: timestamp("sentAt"),
+  errorMessage: text("errorMessage"),
+  
+  // Response tracking (if buttons were clicked)
+  response: varchar("response", { length: 200 }), // Button ID that was clicked
+  respondedAt: timestamp("respondedAt"),
+  
+  // Recurring reminders
+  isRecurring: boolean("isRecurring").default(false),
+  recurrencePattern: mysqlEnum("recurrencePattern", ["daily", "weekly", "monthly"]),
+  recurrenceEndDate: timestamp("recurrenceEndDate"),
+  parentReminderId: int("parentReminderId"), // For recurring instances
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  idxLeadScheduled: index("idx_reminders_lead_scheduled").on(t.leadId, t.scheduledAt),
+  idxStatusScheduled: index("idx_reminders_status_scheduled").on(t.status, t.scheduledAt),
+}));
+
+export type LeadReminder = typeof leadReminders.$inferSelect;
+export type InsertLeadReminder = typeof leadReminders.$inferInsert;
+
+/**
  * WhatsApp connection settings (API or QR)
  */
 export const whatsappConnections = mysqlTable("whatsapp_connections", {
@@ -727,3 +775,234 @@ export const smtpConnections = mysqlTable("smtp_connections", {
 
 export type SmtpConnection = typeof smtpConnections.$inferSelect;
 export type InsertSmtpConnection = typeof smtpConnections.$inferInsert;
+
+/**
+ * Tags for categorizing leads and conversations
+ */
+export const tags = mysqlTable("tags", {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 50 }).notNull(),
+    color: varchar("color", { length: 7 }).default("#3b82f6").notNull(), // hex color
+    description: text("description"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+    uniqName: uniqueIndex("uniq_tag_name").on(t.name),
+}));
+
+export type Tag = typeof tags.$inferSelect;
+export type InsertTag = typeof tags.$inferInsert;
+
+export const leadTags = mysqlTable("lead_tags", {
+    id: int("id").autoincrement().primaryKey(),
+    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    tagId: int("tagId").notNull().references(() => tags.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+    uniqLeadTag: uniqueIndex("uniq_lead_tag").on(t.leadId, t.tagId),
+}));
+
+export type LeadTag = typeof leadTags.$inferSelect;
+export type InsertLeadTag = typeof leadTags.$inferInsert;
+
+export const conversationTags = mysqlTable("conversation_tags", {
+    id: int("id").autoincrement().primaryKey(),
+    conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    tagId: int("tagId").notNull().references(() => tags.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+    uniqConvTag: uniqueIndex("uniq_conv_tag").on(t.conversationId, t.tagId),
+}));
+
+export type ConversationTag = typeof conversationTags.$inferSelect;
+export type InsertConversationTag = typeof conversationTags.$inferInsert;
+
+/**
+ * Notes and Tasks for leads
+ */
+export const leadNotes = mysqlTable("lead_notes", {
+    id: int("id").autoincrement().primaryKey(),
+    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LeadNote = typeof leadNotes.$inferSelect;
+export type InsertLeadNote = typeof leadNotes.$inferInsert;
+
+export const leadTasks = mysqlTable("lead_tasks", {
+    id: int("id").autoincrement().primaryKey(),
+    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 200 }).notNull(),
+    description: text("description"),
+    dueDate: timestamp("dueDate"),
+    status: mysqlEnum("status", ["pending", "completed", "cancelled"]).default("pending").notNull(),
+    priority: mysqlEnum("priority", ["low", "medium", "high"]).default("medium").notNull(),
+    assignedToId: int("assignedToId").references(() => users.id, { onDelete: "set null" }),
+    createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LeadTask = typeof leadTasks.$inferSelect;
+export type InsertLeadTask = typeof leadTasks.$inferInsert;
+
+/**
+ * AI Suggestions and Analysis
+ */
+export const aiSuggestions = mysqlTable("ai_suggestions", {
+    id: int("id").autoincrement().primaryKey(),
+    conversationId: int("conversationId").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    suggestion: text("suggestion").notNull(),
+    context: text("context"), // JSON with message history used
+    used: boolean("used").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AiSuggestion = typeof aiSuggestions.$inferSelect;
+export type InsertAiSuggestion = typeof aiSuggestions.$inferInsert;
+
+/**
+ * Chatbot Flows and Auto-responses
+ */
+export const chatbotFlows = mysqlTable("chatbot_flows", {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    trigger: mysqlEnum("trigger", ["keyword", "new_conversation", "no_match", "hours"]).notNull(),
+    triggerValue: varchar("triggerValue", { length: 200 }), // keyword or condition
+    responses: json("responses").$type<string[]>().notNull(), // array of possible responses
+    isActive: boolean("isActive").default(true).notNull(),
+    hoursOnly: boolean("hoursOnly").default(false).notNull(), // only outside business hours
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ChatbotFlow = typeof chatbotFlows.$inferSelect;
+export type InsertChatbotFlow = typeof chatbotFlows.$inferInsert;
+
+/**
+ * Quotations/Quotes System
+ */
+export const quotations = mysqlTable("quotations", {
+    id: int("id").autoincrement().primaryKey(),
+    leadId: int("leadId").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    conversationId: int("conversationId").references(() => conversations.id, { onDelete: "set null" }),
+    quoteNumber: varchar("quoteNumber", { length: 50 }).notNull().unique(),
+    title: varchar("title", { length: 200 }).notNull(),
+    description: text("description"),
+    items: json("items").$type<{name: string; quantity: number; unitPrice: number; total: number}[]>().notNull(),
+    subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+    tax: decimal("tax", { precision: 12, scale: 2 }).default("0.00"),
+    total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 10 }).default("PYG").notNull(),
+    status: mysqlEnum("status", ["draft", "sent", "approved", "rejected", "expired"]).default("draft").notNull(),
+    validUntil: timestamp("validUntil"),
+    approvedAt: timestamp("approvedAt"),
+    rejectedAt: timestamp("rejectedAt"),
+    rejectionReason: text("rejectionReason"),
+    pdfUrl: varchar("pdfUrl", { length: 500 }),
+    createdById: int("createdById").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Quotation = typeof quotations.$inferSelect;
+export type InsertQuotation = typeof quotations.$inferInsert;
+
+/**
+ * Forms/Surveys for lead capture
+ */
+export const forms = mysqlTable("forms", {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    slug: varchar("slug", { length: 100 }).notNull().unique(),
+    title: varchar("title", { length: 200 }),
+    description: text("description"),
+    fields: json("fields").$type<{name: string; label: string; type: string; required: boolean; options?: string[]}[]>().notNull(),
+    whatsappNumberId: int("whatsappNumberId").references(() => whatsappNumbers.id, { onDelete: "set null" }),
+    welcomeMessage: text("welcomeMessage"),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Form = typeof forms.$inferSelect;
+export type InsertForm = typeof forms.$inferInsert;
+
+/**
+ * License / Subscription management
+ */
+export const license = mysqlTable("license", {
+    id: int("id").autoincrement().primaryKey(),
+    key: varchar("key", { length: 255 }).notNull().unique(),
+    status: mysqlEnum("status", ["active", "expired", "canceled", "trial"]).default("trial").notNull(),
+    plan: varchar("plan", { length: 50 }).default("starter").notNull(), // starter, pro, enterprise
+    expiresAt: timestamp("expiresAt"),
+    maxUsers: int("maxUsers").default(5),
+    maxWhatsappNumbers: int("maxWhatsappNumbers").default(3),
+    maxMessagesPerMonth: int("maxMessagesPerMonth").default(10000),
+    features: json("features").$type<string[]>(), // e.g., ["api", "webhooks", "advanced_analytics"]
+    metadata: json("metadata").$type<{
+        stripeCustomerId?: string;
+        stripeSubscriptionId?: string;
+        paymentProvider?: 'stripe' | 'mercadopago';
+    }>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type License = typeof license.$inferSelect;
+export type InsertLicense = typeof license.$inferInsert;
+
+/**
+ * Monthly usage tracking for billing
+ */
+export const usageTracking = mysqlTable("usage_tracking", {
+    id: int("id").autoincrement().primaryKey(),
+    year: int("year").notNull(),
+    month: int("month").notNull(), // 1-12
+    messagesSent: int("messagesSent").default(0),
+    messagesReceived: int("messagesReceived").default(0),
+    activeUsers: int("activeUsers").default(0),
+    activeWhatsappNumbers: int("activeWhatsappNumbers").default(0),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+    uniqYearMonth: uniqueIndex("uniq_usage_year_month").on(t.year, t.month),
+}));
+
+/**
+ * Webhooks for external integrations
+ */
+export const webhooks = mysqlTable("webhooks", {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    url: varchar("url", { length: 500 }).notNull(),
+    secret: varchar("secret", { length: 255 }).notNull(),
+    events: json("events").$type<string[]>().notNull(), // e.g., ["lead.created", "message.received"]
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Webhook = typeof webhooks.$inferSelect;
+export type InsertWebhook = typeof webhooks.$inferInsert;
+
+export const webhookDeliveries = mysqlTable("webhook_deliveries", {
+    id: int("id").autoincrement().primaryKey(),
+    webhookId: int("webhookId").notNull().references(() => webhooks.id, { onDelete: "cascade" }),
+    event: varchar("event", { length: 100 }).notNull(),
+    payload: text("payload").notNull(),
+    responseStatus: int("responseStatus"),
+    responseBody: text("responseBody"),
+    success: boolean("success").default(false).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type InsertWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+
+export type UsageTracking = typeof usageTracking.$inferSelect;
+export type InsertUsageTracking = typeof usageTracking.$inferInsert;

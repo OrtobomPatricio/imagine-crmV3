@@ -4,6 +4,7 @@ import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 import { saveBufferToUploads } from "../_core/media-storage";
 import { leads, conversations, chatMessages, whatsappNumbers, pipelines, pipelineStages } from "../../drizzle/schema";
 import { eq, and, asc, sql } from "drizzle-orm";
+import { emitToConversation, emitToUser } from "./websocket";
 import { normalizeContactPhone } from "../_core/phone";
 
 
@@ -77,12 +78,31 @@ export const MessageHandler = {
             updates.deliveredAt = new Date();
         }
 
-        await db.update(chatMessages)
+        const result = await db.update(chatMessages)
             .set(updates)
             .where(and(
                 eq(chatMessages.whatsappMessageId, whatsappMessageId),
                 eq(chatMessages.whatsappNumberId, userId)
             ));
+
+        // Emit status update via WebSocket
+        if (result) {
+            const messages = await db.select({
+                id: chatMessages.id,
+                conversationId: chatMessages.conversationId,
+            })
+            .from(chatMessages)
+            .where(eq(chatMessages.whatsappMessageId, whatsappMessageId))
+            .limit(1);
+
+            if (messages[0]) {
+                emitToConversation(messages[0].conversationId, "message:status", {
+                    messageId: messages[0].id,
+                    status,
+                    timestamp: new Date(),
+                });
+            }
+        }
     },
 
     async handleIncomingMessage(userId: number, message: any, upsertType: 'append' | 'notify' = 'notify') {
@@ -109,10 +129,24 @@ export const MessageHandler = {
         }
 
         const fromMe = message.key.fromMe;
+        
+        // Handle location messages
+        const locationMessage = message.message?.locationMessage;
+        let locationData: { latitude?: number; longitude?: number; locationName?: string } | null = null;
+        
+        if (locationMessage) {
+            locationData = {
+                latitude: locationMessage.degreesLatitude,
+                longitude: locationMessage.degreesLongitude,
+                locationName: locationMessage.name || null,
+            };
+        }
+        
         const text = message.message?.conversation ||
             message.message?.extendedTextMessage?.text ||
             message.message?.imageMessage?.caption ||
             message.message?.videoMessage?.caption ||
+            (locationMessage ? `📍 Ubicación${locationMessage.name ? ': ' + locationMessage.name : ''}` : null) ||
             (message.message?.imageMessage ? "Image" : null) ||
             (message.message?.videoMessage ? "Video" : null) ||
             (message.message?.audioMessage ? "Audio" : null) ||
@@ -213,6 +247,10 @@ export const MessageHandler = {
                     updates.unreadCount = (existingConv[0].unreadCount || 0) + 1;
                     updates.lastMessageAt = new Date(); // now
                     updates.status = 'active'; // revive archived chats if new message comes
+                    // Reopen closed ticket if user responds
+                    if (existingConv[0].ticketStatus === 'closed') {
+                        updates.ticketStatus = 'open';
+                    }
                 } else if (upsertType === 'append' || fromMe) {
                     // For history, we might want to ensure lastMessageAt reflects the LATEST message
                     // But we are processing one by one.
@@ -246,16 +284,17 @@ export const MessageHandler = {
             const inner = unwrapBaileysMessage(message.message);
 
             // Detect Type
-            let msgType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' = 'text';
+            let msgType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'location' = 'text';
             if (inner?.imageMessage) msgType = 'image';
             else if (inner?.videoMessage) msgType = 'video';
             else if (inner?.audioMessage) msgType = 'audio';
             else if (inner?.documentMessage) msgType = 'document';
             else if (inner?.stickerMessage) msgType = 'sticker';
+            else if (inner?.locationMessage || locationData) msgType = 'location';
 
             const media = await maybeDownloadMedia(inner, upsertType);
 
-            await db.insert(chatMessages).values({
+            const [inserted] = await db.insert(chatMessages).values({
                 conversationId: conversationId,
                 whatsappNumberId: userId,
                 whatsappConnectionType: 'qr',
@@ -265,11 +304,23 @@ export const MessageHandler = {
                 mediaUrl: media.mediaUrl,
                 mediaName: media.mediaName,
                 mediaMimeType: media.mediaMimeType,
+                latitude: locationData?.latitude ?? null,
+                longitude: locationData?.longitude ?? null,
+                locationName: locationData?.locationName ?? null,
                 whatsappMessageId: message.key.id,
                 status: fromMe ? 'sent' : 'delivered', // Assume sent if from me in history
                 deliveredAt: fromMe ? null : messageTimestamp,
                 sentAt: messageTimestamp,
                 createdAt: messageTimestamp
+            }).$returningId();
+
+            // Emit new message via WebSocket
+            emitToConversation(conversationId, "message:new", {
+                id: inserted.id,
+                conversationId,
+                content: text,
+                fromMe,
+                createdAt: messageTimestamp,
             });
 
             console.log(`[MessageHandler] Saved ${upsertType} msg ${message.key.id} for Lead ${leadId} in Conversation ${conversationId}`);

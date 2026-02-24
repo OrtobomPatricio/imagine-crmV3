@@ -48,7 +48,11 @@ import {
   Database,
   Slash,
   Layers,
+  Search,
 } from "lucide-react";
+import { CommandPalette, useCommandPalette } from "./CommandPalette";
+import { RealtimeNotifications } from "./RealtimeNotifications";
+import { ThemeToggle } from "./ThemeToggle";
 import { CSSProperties, ReactNode, useEffect, useRef, useState, Fragment } from "react";
 import { useLocation, Link } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -152,6 +156,8 @@ export default function DashboardLayout({
     );
   }
 
+  const { open: commandOpen, setOpen: setCommandOpen } = useCommandPalette();
+
   return (
     <SidebarProvider
       style={
@@ -160,13 +166,20 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent sidebarWidth={sidebarWidth} setSidebarWidth={setSidebarWidth}>
+      <DashboardLayoutContent 
+        sidebarWidth={sidebarWidth} 
+        setSidebarWidth={setSidebarWidth}
+        commandOpen={commandOpen}
+        setCommandOpen={setCommandOpen}
+      >
         {children}
       </DashboardLayoutContent>
       {showTour && <WelcomeTour onComplete={() => setShowTour(false)} />}
       <TeamChatWidget helpCenterOpen={isHelpOpen} />
       <HelpCenter open={isHelpOpen} onOpenChange={setIsHelpOpen} />
       <MobileBottomNav />
+      <RealtimeNotifications />
+      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
     </SidebarProvider>
   );
 }
@@ -175,12 +188,16 @@ type DashboardLayoutContentProps = {
   children: ReactNode;
   sidebarWidth: number;
   setSidebarWidth: (width: number) => void;
+  commandOpen: boolean;
+  setCommandOpen: (open: boolean) => void;
 };
 
 function DashboardLayoutContent({
   children,
   sidebarWidth,
   setSidebarWidth,
+  commandOpen,
+  setCommandOpen,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const { can, isLoading: permsLoading } = usePermissions();
@@ -409,22 +426,20 @@ function DashboardLayoutContent({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            {/* Command Menu */}
-            <CommandMenu />
-
-            {/* Theme Toggle Button */}
+            {/* Search Button */}
             <Button
               variant="outline"
-              size="icon"
-              onClick={toggleTheme}
-              className="rounded-full bg-background border-border/50 hover:bg-accent hover:text-accent-foreground transition-all duration-300 h-8 w-8"
+              size="sm"
+              onClick={() => setCommandOpen(true)}
+              className="hidden md:flex items-center gap-2 text-muted-foreground"
             >
-              {theme === 'dark' ? (
-                <Sun className="h-4 w-4 text-yellow-400" />
-              ) : (
-                <Moon className="h-4 w-4 text-purple-500" />
-              )}
+              <Search className="h-4 w-4" />
+              <span>Buscar...</span>
+              <kbd className="ml-2 px-1.5 py-0.5 text-xs bg-muted rounded">⌘K</kbd>
             </Button>
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
           </div>
         </div>
 

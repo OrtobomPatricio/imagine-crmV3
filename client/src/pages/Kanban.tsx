@@ -38,18 +38,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { KanbanFiltersBar, KanbanFilters } from "@/components/kanban/KanbanFilters";
 
 // -- Tipos --
 type Lead = {
   id: number;
   name: string;
   phone: string;
-  status: string; // legacy
+  status: string;
   pipelineStageId?: number | null;
   country: string;
+  value?: number | null;
+  assignedToId?: number | null;
 };
 
-function LeadCard({ lead }: { lead: Lead }) {
+function LeadCard({ lead, tags }: { lead: Lead; tags?: { id: number; name: string; color: string }[] }) {
   return (
     <Card className="cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow">
       <CardContent className="p-3">
@@ -60,13 +63,41 @@ function LeadCard({ lead }: { lead: Lead }) {
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground mb-2">{lead.phone}</p>
+        
+        {/* Tags */}
+        {tags && tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag.id}
+                className="text-[10px] px-1.5 py-0.5 rounded-full"
+                style={{
+                  backgroundColor: tag.color + "20",
+                  color: tag.color,
+                }}
+              >
+                {tag.name}
+              </span>
+            ))}
+            {tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
+            )}
+          </div>
+        )}
+        
+        {/* Value */}
+        {lead.value && lead.value > 0 && (
+          <div className="mt-2 text-xs font-medium text-green-600">
+            G$ {lead.value.toLocaleString()}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 // -- Componente Tarjeta (Sortable Item) --
-function SortableItem({ lead }: { lead: Lead }) {
+function SortableItem({ lead, leadTags }: { lead: Lead; leadTags?: Map<number, { id: number; name: string; color: string }[]> }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `lead-${lead.id}`,
     data: { ...lead, type: "Item" },
@@ -78,15 +109,17 @@ function SortableItem({ lead }: { lead: Lead }) {
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const tags = leadTags?.get(lead.id);
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-3">
-      <LeadCard lead={lead} />
+      <LeadCard lead={lead} tags={tags} />
     </div>
   );
 }
 
 // -- Componente Columna --
-function KanbanColumn({ id, title, leads }: { id: string; title: string; leads: Lead[] }) {
+function KanbanColumn({ id, title, leads, leadTags }: { id: string; title: string; leads: Lead[]; leadTags?: Map<number, { id: number; name: string; color: string }[]> }) {
   const { setNodeRef } = useDroppable({
     id: `stage-${id}`,
     data: { type: "Container", id },
@@ -104,7 +137,7 @@ function KanbanColumn({ id, title, leads }: { id: string; title: string; leads: 
         <SortableContext id={`stage-${id}`} items={leads.map((l) => `lead-${l.id}`)} strategy={verticalListSortingStrategy}>
           <div className="px-1 min-h-[50px]">
             {leads.map((lead) => (
-              <SortableItem key={lead.id} lead={lead} />
+              <SortableItem key={lead.id} lead={lead} leadTags={leadTags} />
             ))}
           </div>
         </SortableContext>
@@ -116,6 +149,17 @@ function KanbanColumn({ id, title, leads }: { id: string; title: string; leads: 
 // -- Página Principal --
 export default function KanbanBoard() {
   const [activePipelineId, setActivePipelineId] = useState<number | null>(null);
+  const [filters, setFilters] = useState<KanbanFilters>({
+    search: "",
+    tagIds: [],
+    assignedToId: null,
+    country: null,
+    source: null,
+    dateFrom: null,
+    dateTo: null,
+    hasTasks: null,
+    showArchived: false,
+  });
 
   const { data: pipelines, isLoading: isLoadingPipelines } = trpc.pipelines.list.useQuery();
 
@@ -127,9 +171,43 @@ export default function KanbanBoard() {
   }, [pipelines, activePipelineId]);
 
   const { data: leadsByStage, isLoading: isLoadingLeads, refetch } = trpc.leads.getByPipeline.useQuery(
-    { pipelineId: activePipelineId ?? undefined },
+    { 
+      pipelineId: activePipelineId ?? undefined,
+      filters: {
+        search: filters.search,
+        tagIds: filters.tagIds,
+        assignedToId: filters.assignedToId,
+        country: filters.country,
+        source: filters.source,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+      }
+    },
     { enabled: !!activePipelineId }
   );
+
+  // Fetch tags for all visible leads
+  const allLeadIds = useMemo(() => {
+    if (!leadsByStage) return [];
+    return Object.values(leadsByStage).flat().map((l: any) => l.id);
+  }, [leadsByStage]);
+
+  const { data: allLeadTags } = trpc.tags.getLeadTagsBatch.useQuery(
+    { leadIds: allLeadIds },
+    { enabled: allLeadIds.length > 0 }
+  );
+
+  const leadTagsMap = useMemo(() => {
+    if (!allLeadTags) return new Map();
+    const map = new Map<number, { id: number; name: string; color: string }[]>();
+    allLeadTags.forEach((item: any) => {
+      if (!map.has(item.leadId)) {
+        map.set(item.leadId, []);
+      }
+      map.get(item.leadId)?.push({ id: item.tagId, name: item.name, color: item.color });
+    });
+    return map;
+  }, [allLeadTags]);
 
   const [board, setBoard] = useState<Record<number, Lead[]>>({});
 
@@ -157,6 +235,12 @@ export default function KanbanBoard() {
 
   const activePipeline = useMemo(() => pipelines?.find((p: any) => p.id === activePipelineId), [pipelines, activePipelineId]);
   const columns = activePipeline?.stages || [];
+
+  // Count total visible leads
+  const totalVisibleLeads = useMemo(() => {
+    if (!leadsByStage) return 0;
+    return Object.values(leadsByStage).reduce((acc: number, leads: any) => acc + leads.length, 0);
+  }, [leadsByStage]);
 
   const settingsQuery = trpc.settings.get.useQuery();
   const updateLead = trpc.leads.update.useMutation({
@@ -365,12 +449,20 @@ export default function KanbanBoard() {
   return (
     <>
       <div className="h-[calc(100vh-100px)] flex flex-col p-4">
-        {/* ... existing content ... */}
-        <div className="mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Pipeline de Ventas</h1>
-            <p className="text-muted-foreground">{activePipeline?.name || "Cargando..."}</p>
+        {/* Header with filters */}
+        <div className="mb-4">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Pipeline de Ventas</h1>
+              <p className="text-muted-foreground">
+                {activePipeline?.name || "Cargando..."} 
+                {totalVisibleLeads > 0 && (
+                  <span className="ml-2 text-sm">({totalVisibleLeads} leads)</span>
+                )}
+              </p>
+            </div>
           </div>
+          <KanbanFiltersBar filters={filters} onChange={setFilters} pipelineId={activePipelineId} />
         </div>
 
         <DndContext
@@ -388,6 +480,7 @@ export default function KanbanBoard() {
                 id={String(stage.id)}
                 title={stage.name}
                 leads={board[stage.id] || []}
+                leadTags={leadTagsMap}
               />
             ))}
           </div>

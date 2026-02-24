@@ -78,7 +78,8 @@ services:
       WHATSAPP_GRAPH_BASE_URL: ${WHATSAPP_GRAPH_BASE_URL:-https://graph.facebook.com}
       RUN_MIGRATIONS: "1"
     volumes:
-      - uploads_data:/app/dist/public/uploads
+      - uploads_data:/app/storage/uploads
+      - sessions_data:/app/server/sessions
     logging:
       driver: "json-file"
       options:
@@ -111,6 +112,7 @@ volumes:
   mysql_data:
   redis_data:
   uploads_data:
+  sessions_data:
   caddy_data:
   caddy_config:
 

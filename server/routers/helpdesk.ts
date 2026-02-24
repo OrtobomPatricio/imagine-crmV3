@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, desc, eq, like, or } from "drizzle-orm";
+import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { conversations, supportQueues, supportUserQueues, quickAnswers, users } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { permissionProcedure, router } from "../_core/trpc";
@@ -167,7 +167,11 @@ export const helpdeskRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       await db.update(conversations)
-        .set({ assignedToId: input.assignedToId })
+        .set({ 
+          assignedToId: input.assignedToId,
+          // Auto-open ticket if pending when assigning
+          ticketStatus: sql`CASE WHEN ${conversations.ticketStatus} = 'pending' THEN 'open' ELSE ${conversations.ticketStatus} END`
+        })
         .where(eq(conversations.id, input.conversationId));
       return { ok: true };
     }),

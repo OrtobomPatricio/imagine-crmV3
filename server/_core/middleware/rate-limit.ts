@@ -2,12 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
 
 // Configuración de Rate Limit
-const RATE_MAX_REDIS = 100;
+const RATE_MAX_REDIS = 2000;
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
 
 // Límite en memoria simple como respaldo
 const RATE_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS ?? "60000"); // 1 minuto
-const RATE_MAX_MEMORY = Number(process.env.RATE_LIMIT_MAX ?? "600"); // 600 peticiones por minuto
+const RATE_MAX_MEMORY = Number(process.env.RATE_LIMIT_MAX ?? "2000"); // 2000 peticiones por minuto
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
 // Limpieza de buckets en memoria (Optimización: Solo limpiar si tamaño excede umbral o periódicamente)

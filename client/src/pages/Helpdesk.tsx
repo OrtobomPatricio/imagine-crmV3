@@ -113,7 +113,7 @@ export default function Helpdesk() {
         </Card>
 
         <div className={cn(
-          "w-full lg:w-80 flex-col overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300 hidden lg:flex"
+          "w-full lg:w-96 flex-col overflow-hidden border-border/50 shadow-sm bg-background/50 backdrop-blur-sm transition-all duration-300 hidden lg:flex"
         )}>
           {selectedConversation?.leadId ? (
             <ChatLeadDetails leadId={selectedConversation.leadId} />

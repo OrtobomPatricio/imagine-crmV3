@@ -317,7 +317,18 @@ export const leadsRouter = router({
         }),
 
     getByPipeline: permissionProcedure("leads.view")
-        .input(z.object({ pipelineId: z.number().optional() }))
+        .input(z.object({ 
+            pipelineId: z.number().optional(),
+            filters: z.object({
+                search: z.string().optional(),
+                tagIds: z.array(z.number()).optional(),
+                assignedToId: z.number().optional().nullable(),
+                country: z.string().optional().nullable(),
+                source: z.string().optional().nullable(),
+                dateFrom: z.string().optional().nullable(),
+                dateTo: z.string().optional().nullable(),
+            }).optional(),
+        }))
         .query(async ({ input }) => {
             const db = await getDb();
             if (!db) return {};
@@ -331,14 +342,51 @@ export const leadsRouter = router({
             const stages = await db.select().from(pipelineStages).where(eq(pipelineStages.pipelineId, pipeline.id)).orderBy(asc(pipelineStages.order));
             const stageIds = stages.map(s => s.id);
 
-            const filteredLeads = stageIds.length > 0
-                ? await db.select().from(leads).where(inArray(leads.pipelineStageId, stageIds)).orderBy(asc(leads.kanbanOrder))
-                : [];
+            // Build filter conditions
+            const conditions: any[] = [inArray(leads.pipelineStageId, stageIds)];
+            const filters = input.filters;
+
+            if (filters?.search) {
+                const term = `%${filters.search}%`;
+                conditions.push(sql`(${leads.name} LIKE ${term} OR ${leads.phone} LIKE ${term} OR ${leads.email} LIKE ${term})`);
+            }
+
+            if (filters?.country) {
+                conditions.push(eq(leads.country, filters.country));
+            }
+
+            if (filters?.source) {
+                conditions.push(eq(leads.source, filters.source));
+            }
+
+            if (filters?.dateFrom) {
+                conditions.push(sql`${leads.createdAt} >= ${new Date(filters.dateFrom)}`);
+            }
+
+            if (filters?.dateTo) {
+                conditions.push(sql`${leads.createdAt} <= ${new Date(filters.dateTo)}`);
+            }
+
+            let query = db.select().from(leads).where(and(...conditions)).orderBy(asc(leads.kanbanOrder));
+
+            const filteredLeads = await query;
+
+            // Filter by tags if specified (post-query filter)
+            let leadsWithTags = filteredLeads;
+            if (filters?.tagIds && filters.tagIds.length > 0) {
+                const { leadTags } = await import("../../drizzle/schema");
+                const leadIdsWithTags = await db.select({ leadId: leadTags.leadId })
+                    .from(leadTags)
+                    .where(inArray(leadTags.tagId, filters.tagIds));
+                
+                const allowedLeadIds = new Set(leadIdsWithTags.map(lt => lt.leadId));
+                leadsWithTags = filteredLeads.filter(lead => allowedLeadIds.has(lead.id));
+            }
 
             const result: Record<string, typeof leads.$inferSelect[]> = {};
             stages.forEach(s => result[s.id] = []);
 
-            for (const lead of filteredLeads) {
+            for (const lead of leadsWithTags) {
                 if (lead.pipelineStageId && result[lead.pipelineStageId]) {
                     result[lead.pipelineStageId].push(lead);
                 }

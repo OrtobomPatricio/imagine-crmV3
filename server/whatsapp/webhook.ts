@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { chatMessages, conversations, whatsappConnections } from "../../drizzle/schema";
 import { normalizeContactPhone } from "../_core/phone";
 import { logger, safeError } from "../_core/logger";
+import { emitToConversation } from "../services/websocket";
 import { decryptSecret } from "../_core/crypto";
 import { saveBufferToUploads } from "../_core/media-storage";
 
@@ -239,13 +240,26 @@ export async function processMetaWebhookPayload(payload: any, _opts: { skipSigna
             } as any);
             conversationId = ins[0].insertId as number;
           } else {
+            // Get current conversation state to check if ticket is closed
+            const currentConv = await db.select({ ticketStatus: conversations.ticketStatus })
+              .from(conversations)
+              .where(eq(conversations.id, conversationId))
+              .limit(1);
+            
+            const updates: any = {
+              lastMessageAt: ts,
+              unreadCount: sql`${conversations.unreadCount} + 1`,
+              whatsappConnectionType: "api",
+            };
+            
+            // Reopen closed ticket if user responds
+            if (currentConv[0]?.ticketStatus === 'closed') {
+              updates.ticketStatus = 'open';
+            }
+            
             await db
               .update(conversations)
-              .set({
-                lastMessageAt: ts,
-                unreadCount: sql`${conversations.unreadCount} + 1`,
-                whatsappConnectionType: "api",
-              } as any)
+              .set(updates)
               .where(eq(conversations.id, conversationId));
           }
 
@@ -275,7 +289,7 @@ export async function processMetaWebhookPayload(payload: any, _opts: { skipSigna
               storedFilename = downloaded.filename || filename || saved.originalname;
             }
           }
-await db.insert(chatMessages).values({
+const [inserted] = await db.insert(chatMessages).values({
             conversationId,
             whatsappNumberId,
             whatsappConnectionType: "api",
@@ -292,7 +306,16 @@ await db.insert(chatMessages).values({
             whatsappMessageId: messageId,
             deliveredAt: ts,
             createdAt: ts,
-          } as any);
+          } as any).$returningId();
+
+          // Emit new message via WebSocket
+          emitToConversation(conversationId, "message:new", {
+            id: inserted.id,
+            conversationId,
+            content,
+            fromMe: false,
+            createdAt: ts,
+          });
 
         } catch (e) {
           logger.error({ err: safeError(e), phoneNumberId }, "failed processing inbound message");

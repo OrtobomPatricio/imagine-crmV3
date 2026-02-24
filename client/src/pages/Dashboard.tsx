@@ -154,13 +154,13 @@ function DashboardContent() {
             path: "/leads",
         },
         {
-            key: "kanban",
+            key: "leads-module",
             icon: LayoutGrid,
-            label: "Kanban Board",
-            description: "Visualiza tu pipeline de ventas",
+            label: "Pipeline de Ventas",
+            description: "Visualiza y gestiona tu pipeline",
             iconColor: "icon-container-orange",
             hoverColor: "hover:border-orange-500/50",
-            path: "/kanban",
+            path: "/leads",
         },
         {
             key: "campaigns",
@@ -251,7 +251,7 @@ function DashboardContent() {
             description: "Estado de salud de tus conexiones",
             iconColor: "icon-container-red",
             hoverColor: "hover:border-red-500/50",
-            path: "/warmup",
+            path: "/monitoring",
         },
         {
             key: "whatsapp",
