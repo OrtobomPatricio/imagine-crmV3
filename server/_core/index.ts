@@ -323,6 +323,24 @@ async function startServer() {
     import("../services/wa-health-check").then(({ startWAHealthCheck }) => {
       startWAHealthCheck();
     }).catch(err => logger.error({ err: safeError(err) }, "[WAHealthCheck] startup failed"));
+
+    // Application cache (Redis + in-memory fallback)
+    import("../services/app-cache").then(({ initCacheRedis }) => {
+      initCacheRedis().catch(err => logger.error({ err: safeError(err) }, "[Cache] init failed"));
+    });
+
+    // Materialized views (create tables + initial refresh)
+    import("../services/materialized-views").then(async ({ createMaterializedViews, refreshMaterializedViews }) => {
+      await createMaterializedViews();
+      await refreshMaterializedViews();
+      // Refresh every 15 minutes
+      setInterval(() => refreshMaterializedViews().catch(() => { }), 15 * 60 * 1000);
+    }).catch(err => logger.error({ err: safeError(err) }, "[MV] startup failed"));
+
+    // APM (Sentry performance monitoring)
+    import("../services/apm").then(({ initAPM }) => {
+      initAPM();
+    }).catch(err => logger.error({ err: safeError(err) }, "[APM] startup failed"));
   });
 }
 

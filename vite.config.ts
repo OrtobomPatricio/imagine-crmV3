@@ -152,6 +152,19 @@ const plugins = [
   }),
 ];
 
+// Bundle analyzer (run with ANALYZE=true npm run build)
+if (process.env.ANALYZE === "true") {
+  // @ts-ignore - optional dev dependency
+  import("rollup-plugin-visualizer").then(({ visualizer }) => {
+    plugins.push(visualizer({
+      open: true,
+      filename: "dist/bundle-report.html",
+      gzipSize: true,
+      brotliSize: true,
+    }) as any);
+  }).catch(() => { /* optional dependency */ });
+}
+
 export default defineConfig({
   plugins,
   resolve: {
