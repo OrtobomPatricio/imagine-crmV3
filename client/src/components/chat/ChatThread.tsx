@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 interface Props {
   conversationId: number;
@@ -181,7 +182,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
     // Fix: Access items correctly based on return type structure
     const pages = messagesQuery.data?.pages || [];
     const list = pages.flatMap((p: any) => p.items || []) ?? [];
-    
+
     // Remove duplicates by ID (prevents double rendering)
     const uniqueMessages = new Map();
     list.forEach((msg: any) => {
@@ -189,14 +190,25 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
         uniqueMessages.set(msg.id, msg);
       }
     });
-    
+
     return [...uniqueMessages.values()].sort((a: any, b: any) => {
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   }, [messagesQuery.data]);
 
+  const virtualizer = useVirtualizer({
+    count: sortedMessages.length,
+    getScrollElement: () => messagesContainerRef.current,
+    estimateSize: () => 70, // Average message height estimate
+    overscan: 10,
+  });
+
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    if (sortedMessages.length > 0) {
+      virtualizer.scrollToIndex(sortedMessages.length - 1, { align: 'end', behavior: behavior as any });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
   };
 
   // Track whether the user is near the bottom (to avoid auto-jumping while reading)
@@ -225,17 +237,17 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   // WebSocket event handlers
   useEffect(() => {
     console.log("[ChatThread] Setting up WebSocket listeners for conversation", conversationId);
-    
+
     // Listen for new messages
     const unsubNewMessage = onWsEvent("message:new", (data) => {
       console.log("[ChatThread] Received message:new event:", data);
-      
+
       // Deduplication: skip if we already processed this message ID
       if (data.id && processedMessageIds.current.has(data.id)) {
         console.log("[ChatThread] Skipping duplicate message:", data.id);
         return;
       }
-      
+
       // Mark as processed
       if (data.id) {
         processedMessageIds.current.add(data.id);
@@ -245,11 +257,11 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
           processedMessageIds.current.delete(firstId);
         }
       }
-      
+
       // Invalidate messages to refresh
       utils.chat.getMessages.invalidate({ conversationId, limit: 50 });
       utils.chat.listConversations.invalidate();
-      
+
       // Play notification sound if not from me
       if (!data.fromMe) {
         // Optional: play sound
@@ -482,17 +494,17 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
   useEffect(() => {
     if (message.trim()) {
       sendTypingIndicator(true);
-      
+
       // Clear previous timeout
       if (typingTimeout) clearTimeout(typingTimeout);
-      
+
       // Set new timeout to stop typing after 3 seconds of inactivity
       const timeout = setTimeout(() => {
         sendTypingIndicator(false);
       }, 3000);
       setTypingTimeout(timeout);
     }
-    
+
     return () => {
       if (typingTimeout) clearTimeout(typingTimeout);
     };
@@ -787,7 +799,7 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
           ) : (
             <>
               {messagesQuery.hasPreviousPage && (
-                <div className="flex justify-center">
+                <div className="flex justify-center mb-4">
                   <Button
                     variant="outline"
                     size="sm"
@@ -799,52 +811,66 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
                 </div>
               )}
 
-              {sortedMessages.map((msg: any) => {
-                const isOutgoing = msg.direction === "outbound";
+              <div
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const msg = sortedMessages[virtualItem.index];
+                  const isOutgoing = msg.direction === "outbound";
 
-                // Render proper status icon based on read/delivered/sent
-                const getStatusIcon = () => {
-                  if (msg.status === "failed") {
-                    return <span className="text-red-400">⚠</span>;
-                  }
-                  if (msg.readAt) {
-                    return <CheckCheck className="w-3.5 h-3.5 text-blue-500" />;
-                  }
-                  if (msg.deliveredAt) {
-                    return <CheckCheck className="w-3.5 h-3.5 opacity-60" />;
-                  }
-                  if (msg.sentAt || msg.status === "sent") {
-                    return <Check className="w-3.5 h-3.5 opacity-60" />;
-                  }
-                  return <Clock className="w-3.5 h-3.5 opacity-40" />;
-                };
+                  // Render proper status icon based on read/delivered/sent
+                  const getStatusIcon = () => {
+                    if (msg.status === "failed") {
+                      return <span className="text-red-400">⚠</span>;
+                    }
+                    if (msg.readAt) {
+                      return <CheckCheck className="w-3.5 h-3.5 text-blue-500" />;
+                    }
+                    if (msg.deliveredAt) {
+                      return <CheckCheck className="w-3.5 h-3.5 opacity-60" />;
+                    }
+                    if (msg.sentAt || msg.status === "sent") {
+                      return <Check className="w-3.5 h-3.5 opacity-60" />;
+                    }
+                    return <Clock className="w-3.5 h-3.5 opacity-40" />;
+                  };
 
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isOutgoing ? "justify-end" : "justify-start"}`}
-                    data-testid={`message-${msg.id}`}
-                  >
+                  return (
                     <div
-                      className={`max-w-[80%] rounded-lg p-3 ${isOutgoing ? "bg-primary text-primary-foreground" : "bg-muted"
-                        }`}
+                      key={virtualItem.key}
+                      data-index={virtualItem.index}
+                      ref={virtualizer.measureElement}
+                      className={`absolute top-0 left-0 w-full flex ${isOutgoing ? "justify-end" : "justify-start"} pb-4`}
+                      data-testid={`message-${msg.id}`}
+                      style={{
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
                     >
-                      <div className="text-sm">{renderMessageBody(msg)}</div>
                       <div
-                        className={`text-xs mt-1 ${isOutgoing ? "text-primary-foreground/70" : "text-muted-foreground"
-                          } flex items-center gap-1 justify-end`}
+                        className={`max-w-[80%] rounded-lg p-3 ${isOutgoing ? "bg-primary text-primary-foreground" : "bg-muted"
+                          }`}
                       >
-                        {format(new Date(msg.createdAt), "HH:mm")}
-                        {isOutgoing && <span className="ml-1">{getStatusIcon()}</span>}
+                        <div className="text-sm break-words">{renderMessageBody(msg)}</div>
+                        <div
+                          className={`text-xs mt-1 ${isOutgoing ? "text-primary-foreground/70" : "text-muted-foreground"
+                            } flex items-center gap-1 justify-end`}
+                        >
+                          {format(new Date(msg.createdAt), "HH:mm")}
+                          {isOutgoing && <span className="ml-1">{getStatusIcon()}</span>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
 
               {/* Typing Indicator */}
               {isContactTyping && (
-                <div className="flex justify-start">
+                <div className="flex justify-start pb-4">
                   <div className="max-w-[80%] rounded-lg p-3 bg-muted">
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">

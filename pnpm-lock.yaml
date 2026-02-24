@@ -122,6 +122,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.90.2
         version: 5.90.21(react@19.2.4)
+      '@tanstack/react-virtual':
+        specifier: ^3.13.19
+        version: 3.13.19(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@trpc/client':
         specifier: ^11.6.0
         version: 11.10.0(@trpc/server@11.10.0(typescript@5.9.3))(typescript@5.9.3)
@@ -206,6 +209,9 @@ importers:
       jose:
         specifier: 6.1.0
         version: 6.1.0
+      libphonenumber-js:
+        specifier: ^1.12.37
+        version: 1.12.37
       lodash:
         specifier: ^4.17.23
         version: 4.17.23
@@ -3446,6 +3452,15 @@ packages:
     resolution: {integrity: sha512-0Lu6y5t+tvlTJMTO7oh5NSpJfpg/5D41LlThfepTixPYkJ0sE2Jj0m0f6yYqujBwIXlId87e234+MxG3D3g7kg==}
     peerDependencies:
       react: ^18 || ^19
+
+  '@tanstack/react-virtual@3.13.19':
+    resolution: {integrity: sha512-KzwmU1IbE0IvCZSm6OXkS+kRdrgW2c2P3Ho3NC+zZXWK6oObv/L+lcV/2VuJ+snVESRlMJ+w/fg4WXI/JzoNGQ==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  '@tanstack/virtual-core@3.13.19':
+    resolution: {integrity: sha512-/BMP7kNhzKOd7wnDeB8NrIRNLwkf5AhCYCvtfZV2GXWbBieFm/el0n6LOAXlTi6ZwHICSNnQcIxRCWHrLzDY+g==}
 
   '@thi.ng/bitstream@2.4.41':
     resolution: {integrity: sha512-treRzw3+7I1YCuilFtznwT3SGtceS9spUXhyBqeuKNTm4nIfMuvg4fNqx4GgpuS6cGPQNPMUJm0OyzKnSe2Emw==}
@@ -7528,8 +7543,8 @@ packages:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
     engines: {node: '>= 10.0.0'}
 
-  unlayer-types@1.376.0:
-    resolution: {integrity: sha512-crSHUWPwaXu+va0wyvAeaO9kDw6pAF6f3f6URKGDtJukqC/XWbxH6OBrur2bNSs40Gl6kznkZKCUa9bmoKqQ2w==}
+  unlayer-types@1.377.0:
+    resolution: {integrity: sha512-1J/nSBMgwGk5SPsSOLWCvXFE94XT9wStHUWNqQGMkeSg0VZQWfN5O2KOP19Gdyrd5R+wUBy/whl2NatJaDuQkw==}
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -11376,6 +11391,14 @@ snapshots:
       '@tanstack/query-core': 5.90.20
       react: 19.2.4
 
+  '@tanstack/react-virtual@3.13.19(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@tanstack/virtual-core': 3.13.19
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
+  '@tanstack/virtual-core@3.13.19': {}
+
   '@thi.ng/bitstream@2.4.41':
     dependencies:
       '@thi.ng/errors': 2.6.3
@@ -15195,7 +15218,7 @@ snapshots:
   react-email-editor@1.7.11(react@19.2.4):
     dependencies:
       react: 19.2.4
-      unlayer-types: 1.376.0
+      unlayer-types: 1.377.0
 
   react-grid-layout@2.2.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
@@ -16175,7 +16198,7 @@ snapshots:
 
   universalify@2.0.1: {}
 
-  unlayer-types@1.376.0: {}
+  unlayer-types@1.377.0: {}
 
   unpipe@1.0.0: {}
 

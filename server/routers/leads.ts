@@ -7,8 +7,34 @@ import { dispatchIntegrationEvent } from "../_core/integrationDispatch";
 import { leadsToCSV, parseCSV, importLeadsFromCSV } from "../services/backup";
 import { COMMISSION_RATES } from "../../shared/const";
 
-// E.164 Regex (basic)
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
+
+// E.164 Regex (basic fallback, though we use libphonenumber now for strict validation)
 const PHONE_REGEX = /^\+?[1-9]\d{7,14}$/;
+
+const phoneValidator = z.string().trim().superRefine((val, ctx) => {
+    try {
+        if (!isValidPhoneNumber(val)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid phone number format. Must be a valid international number.",
+            });
+            return;
+        }
+        const pn = parsePhoneNumber(val);
+        if (!pn.isValid()) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid phone number.",
+            });
+        }
+    } catch (e) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Error parsing phone number.",
+        });
+    }
+});
 
 export const leadsRouter = router({
     search: protectedProcedure
@@ -71,7 +97,7 @@ export const leadsRouter = router({
     create: permissionProcedure("leads.create")
         .input(z.object({
             name: z.string().trim().min(1),
-            phone: z.string().trim().regex(PHONE_REGEX, "Invalid E.164 phone format"),
+            phone: phoneValidator,
             email: z.string().trim().email().optional().or(z.literal("")),
             country: z.string().trim().min(1),
             source: z.string().trim().optional(),
@@ -110,7 +136,7 @@ export const leadsRouter = router({
                 // For now, standard select is "good enough" for Kanban unless high concurrency.
                 let nextOrder = 0;
                 if (stageId) {
-                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, stageId));
+                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, stageId)).for('update');
                     nextOrder = ((maxRows[0] as any)?.max ?? 0) + 1;
                 }
 
@@ -176,7 +202,7 @@ export const leadsRouter = router({
         .input(z.object({
             id: z.number(),
             name: z.string().trim().min(1).optional(),
-            phone: z.string().trim().regex(PHONE_REGEX).optional(),
+            phone: phoneValidator.optional(),
             email: z.string().trim().email().optional().nullable(),
             country: z.string().trim().min(1).optional(),
             source: z.string().trim().optional().nullable(),
@@ -210,7 +236,7 @@ export const leadsRouter = router({
 
                 // Handle atomic stage change and ordering
                 if (data.pipelineStageId) {
-                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, data.pipelineStageId));
+                    const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, data.pipelineStageId)).for('update');
                     const nextOrder = ((maxRows[0] as any)?.max ?? 0) + 1;
                     (data as any).kanbanOrder = nextOrder;
                 }
@@ -255,7 +281,7 @@ export const leadsRouter = router({
             if (!db) throw new Error("Database not available");
 
             return await db.transaction(async (tx) => {
-                const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, input.pipelineStageId));
+                const maxRows = await tx.select({ max: sql<number>`max(${leads.kanbanOrder})` }).from(leads).where(eq(leads.pipelineStageId, input.pipelineStageId)).for('update');
                 const nextOrder = ((maxRows[0] as any)?.max ?? 0) + 1;
 
                 await tx.update(leads)
@@ -317,7 +343,7 @@ export const leadsRouter = router({
         }),
 
     getByPipeline: permissionProcedure("leads.view")
-        .input(z.object({ 
+        .input(z.object({
             pipelineId: z.number().optional(),
             filters: z.object({
                 search: z.string().optional(),
@@ -378,7 +404,7 @@ export const leadsRouter = router({
                 const leadIdsWithTags = await db.select({ leadId: leadTags.leadId })
                     .from(leadTags)
                     .where(inArray(leadTags.tagId, filters.tagIds));
-                
+
                 const allowedLeadIds = new Set(leadIdsWithTags.map(lt => lt.leadId));
                 leadsWithTags = filteredLeads.filter(lead => allowedLeadIds.has(lead.id));
             }
