@@ -34,13 +34,45 @@ export const rateLimitMiddleware = async (req: Request, res: Response, next: Nex
     // Lista blanca de rutas públicas
     if (req.path.startsWith("/api/whatsapp") || req.path.startsWith("/api/webhooks")) return next();
 
-    // Obtención robusta de IP
+    // ── Obtención robusta de IP ──
     const ip = (
         req.ip ||
         (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
         req.socket.remoteAddress ||
         "unknown"
     ).toString().replace('::ffff:', '');
+
+    // ── Granular per-endpoint limits for sensitive operations ──
+    const SENSITIVE_ENDPOINTS: Record<string, { max: number; windowMs: number }> = {
+        "/api/trpc/auth.login": { max: 10, windowMs: 60000 },
+        "/api/trpc/auth.register": { max: 5, windowMs: 60000 },
+        "/api/trpc/backup.exportLeadsCSV": { max: 5, windowMs: 300000 },
+        "/api/trpc/backup.createBackup": { max: 3, windowMs: 300000 },
+        "/api/trpc/backup.importLeadsCSV": { max: 3, windowMs: 300000 },
+        "/api/trpc/settings.update": { max: 20, windowMs: 60000 },
+        "/api/meta/connect": { max: 5, windowMs: 300000 },
+    };
+
+    const endpointConfig = SENSITIVE_ENDPOINTS[req.path];
+    if (endpointConfig) {
+        const epKey = `ratelimit:endpoint:${req.path}:${ip}`;
+        const now = Date.now();
+        const epBucket = buckets.get(epKey);
+
+        if (!epBucket || now > epBucket.resetAt) {
+            buckets.set(epKey, { count: 1, resetAt: now + endpointConfig.windowMs });
+        } else {
+            epBucket.count += 1;
+            if (epBucket.count > endpointConfig.max) {
+                const retryAfter = Math.ceil((epBucket.resetAt - now) / 1000);
+                res.setHeader("Retry-After", retryAfter);
+                return res.status(429).json({
+                    error: "rate_limit",
+                    message: `Límite alcanzado para esta operación. Reintenta en ${retryAfter}s.`
+                });
+            }
+        }
+    }
 
     let user = null;
     try {

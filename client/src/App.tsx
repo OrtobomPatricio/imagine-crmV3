@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { ConnectionIndicator } from "./components/ConnectionIndicator";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
 import MarketingModule from "@/pages/MarketingModule";
@@ -71,7 +72,7 @@ function Router() {
         <Route path="/reports">{() => <Redirect to="/analytics" />}</Route>
         <Route path="/kanban">{() => <Redirect to="/leads" />}</Route>
         <Route path="/warmup">{() => <Redirect to="/monitoring" />}</Route>
-        
+
         <Route path="/integrations" component={Integrations} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/pipelines" component={PipelineSettings} />
@@ -81,7 +82,7 @@ function Router() {
         <Route path="/helpdesk" component={Helpdesk} />
         <Route path="/helpdesk/queues">{() => <Redirect to="/helpdesk" />}</Route>
         <Route path="/helpdesk/quick-answers">{() => <Redirect to="/helpdesk" />}</Route>
-        
+
         <Route path="/backup" component={Backup} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
@@ -95,6 +96,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" switchable>
         <TooltipProvider>
+          <ConnectionIndicator />
           <Toaster />
           <Router />
         </TooltipProvider>

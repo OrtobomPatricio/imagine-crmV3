@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
-// import { VitePWA } from "vite-plugin-pwa";
+import { VitePWA } from "vite-plugin-pwa";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -113,7 +113,43 @@ const plugins = [
   tailwindcss(),
   vitePluginManusRuntime(),
   vitePluginManusDebugCollector(),
-  // VitePWA({ ... })
+  VitePWA({
+    registerType: "autoUpdate",
+    workbox: {
+      globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+      runtimeCaching: [
+        {
+          urlPattern: /^\/api\/trpc\//,
+          handler: "NetworkFirst",
+          options: {
+            cacheName: "trpc-api-cache",
+            expiration: { maxEntries: 50, maxAgeSeconds: 300 },
+            networkTimeoutSeconds: 5,
+          },
+        },
+        {
+          urlPattern: /^\/api\/uploads\//,
+          handler: "CacheFirst",
+          options: {
+            cacheName: "uploads-cache",
+            expiration: { maxEntries: 100, maxAgeSeconds: 86400 },
+          },
+        },
+      ],
+    },
+    manifest: {
+      name: "CRM PRO V4",
+      short_name: "CRM PRO",
+      description: "Sistema avanzado de gestión de clientes multicanal",
+      theme_color: "#1e1e2e",
+      background_color: "#1e1e2e",
+      display: "standalone",
+      icons: [
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+    },
+  }),
 ];
 
 export default defineConfig({
