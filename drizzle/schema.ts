@@ -729,6 +729,24 @@ export type AccessLog = typeof accessLogs.$inferSelect;
 export type InsertAccessLog = typeof accessLogs.$inferInsert;
 
 /**
+ * Terms of Service acceptance tracking
+ */
+export const termsAcceptance = mysqlTable("terms_acceptance", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  termsVersion: varchar("termsVersion", { length: 20 }).notNull(),
+  acceptedAt: timestamp("acceptedAt").defaultNow().notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+}, (t) => ({
+  userVersionIdx: uniqueIndex("idx_terms_user_version").on(t.tenantId, t.userId, t.termsVersion),
+}));
+
+export type TermsAcceptanceRow = typeof termsAcceptance.$inferSelect;
+export type InsertTermsAcceptance = typeof termsAcceptance.$inferInsert;
+
+/**
  * Active sessions for force logout and session management
  */
 export const sessions = mysqlTable("sessions", {
