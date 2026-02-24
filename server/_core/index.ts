@@ -279,10 +279,10 @@ async function startServer() {
   }
 
   const httpServer = createServer(app);
-  
+
   // Initialize WebSocket server
   await initWebSocket(httpServer);
-  
+
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info({ port }, "server listening");
 
@@ -294,6 +294,21 @@ async function startServer() {
     startSessionCleanup();
     startTicketStatusWorker();
     startRemindersWorker();
+
+    // Database optimization (FULLTEXT indexes)
+    import("../services/fulltext-indexes").then(({ createFulltextIndexes }) => {
+      createFulltextIndexes().catch(err => logger.error({ err: safeError(err) }, "[FULLTEXT] index creation failed"));
+    });
+
+    // Database optimization (covering indexes + CHECK constraints)
+    import("../services/db-optimization").then(({ optimizeDatabaseIndexes }) => {
+      optimizeDatabaseIndexes().catch(err => logger.error({ err: safeError(err) }, "[DBOptimize] index creation failed"));
+    });
+
+    // Archival job (daily cleanup of old messages/logs)
+    import("../services/archival-job").then(({ startArchivalJob }) => {
+      startArchivalJob();
+    }).catch(err => logger.error({ err: safeError(err) }, "[Archival] startup failed"));
     // Start Message Queue Worker
     import("../services/queue-worker").then(({ MessageQueueWorker }) => {
       MessageQueueWorker.getInstance().start();
@@ -339,7 +354,8 @@ async function ensureAppSettings() {
     const rows = await db.select().from(appSettings).limit(1);
     if (rows.length === 0) {
       logger.info("seed: appSettings empty, creating defaults");
-      await db.insert(appSettings).values({ tenantId: 1, 
+      await db.insert(appSettings).values({
+        tenantId: 1,
         companyName: "Imagine Lab CRM",
         timezone: "America/Asuncion",
         language: "es",
