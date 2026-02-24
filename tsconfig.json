@@ -28,6 +28,8 @@
   "exclude": [
     "server",
     "dist",
-    "node_modules"
+    "node_modules",
+    "**/*.stories.tsx",
+    "**/*.stories.ts"
   ]
 }
