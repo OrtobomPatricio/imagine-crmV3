@@ -56,8 +56,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Redirect to="/login" />;
   }
 
-  // Forced Onboarding Redirect
-  const isOnboardingDone = onboarding?.completedAt;
+  // Forced Onboarding Redirect (skip in dev mode since MockDB can't persist progress)
+  const isDev = import.meta.env.DEV;
+  const isOnboardingDone = onboarding?.completedAt || isDev;
   if (!isOnboardingDone && location !== '/onboarding') {
     return <Redirect to="/onboarding" />;
   }
