@@ -9,11 +9,11 @@ const STATIC_ASSETS = [
 ];
 
 // Caching strategies
-const networkFirst = async (request: Request) => {
+const networkFirst = async (request) => {
     const cache = await caches.open(CACHE_NAME);
     try {
         const response = await fetch(request);
-        if (response.ok) {
+        if (response.ok && request.method === 'GET') {
             cache.put(request, response.clone());
         }
         return response;
@@ -23,7 +23,7 @@ const networkFirst = async (request: Request) => {
     }
 };
 
-const cacheFirst = async (request: Request) => {
+const cacheFirst = async (request) => {
     const cache = await caches.open(CACHE_NAME);
     const cachedResponse = await cache.match(request);
     if (cachedResponse) return cachedResponse;
@@ -39,23 +39,23 @@ const cacheFirst = async (request: Request) => {
     }
 };
 
-self.addEventListener('install', (event: any) => {
+self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
     );
-    (self as any).skipWaiting();
+    self.skipWaiting();
 });
 
-self.addEventListener('activate', (event: any) => {
+self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) =>
             Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
         )
     );
-    (self as any).clients.claim();
+    self.clients.claim();
 });
 
-self.addEventListener('fetch', (event: any) => {
+self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
     // TRPC API: Network First

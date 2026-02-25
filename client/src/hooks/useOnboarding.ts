@@ -26,15 +26,18 @@ export function useOnboarding() {
     const saveStepMutation = trpc.onboarding.saveStep.useMutation();
     const completeMutation = trpc.onboarding.complete.useMutation();
 
+    const [hasInitialized, setHasInitialized] = useState(false);
+
     useEffect(() => {
-        if (progress) {
+        if (progress && !hasInitialized) {
             if (progress.completedAt) {
                 setCurrentStep('completed');
             } else {
                 setCurrentStep(progress.lastStep as OnboardingStep);
             }
+            setHasInitialized(true);
         }
-    }, [progress]);
+    }, [progress, hasInitialized]);
 
     const nextStep = async (data?: any) => {
         const currentIndex = STEPS.indexOf(currentStep);

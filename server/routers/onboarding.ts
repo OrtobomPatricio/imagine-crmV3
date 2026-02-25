@@ -65,12 +65,16 @@ export const onboardingRouter = router({
             if (!db) throw new Error("Database not available");
 
             // Update tenant directly as well
-            await db.update(tenants)
-                .set({
-                    name: input.name,
-                    // Note: If tenants table had timezone/lang/etc, update them here
-                } as any)
-                .where(eq(tenants.id, ctx.tenantId));
+            try {
+                await db.update(tenants)
+                    .set({
+                        name: input.name,
+                        // Note: If tenants table had timezone/lang/etc, update them here
+                    } as any)
+                    .where(eq(tenants.id, ctx.tenantId));
+            } catch (error) {
+                console.warn("[MockDB] Warning: Could not update tenant name in mock DB");
+            }
 
             return await updateOnboardingStep(
                 ctx.tenantId,
