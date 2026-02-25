@@ -27,6 +27,20 @@ export const whatsappConnectionsRouter = router({
             } as any;
         }),
 
+    getApiConnections: permissionProcedure("monitoring.view")
+        .query(async ({ ctx }) => {
+            const db = await getDb();
+            if (!db) return [];
+
+            return db.select()
+                .from(whatsappConnections)
+                .where(and(
+                    eq(whatsappConnections.tenantId, ctx.tenantId),
+                    eq(whatsappConnections.isConnected, true),
+                    eq(whatsappConnections.connectionType, 'api')
+                ));
+        }),
+
     setupApi: permissionProcedure("monitoring.manage")
         .input(z.object({
             whatsappNumberId: z.number(),
