@@ -44,8 +44,11 @@ export default function Step1Company() {
         }
     });
 
-    const onSubmit = async (values: z.infer<typeof schema>) => {
-        await updateCompanyMutation.mutateAsync(values);
+    const onSubmit = (values: z.infer<typeof schema>) => {
+        // Fire backend save as best-effort, don't block UI
+        updateCompanyMutation.mutate(values, {
+            onError: (err) => console.warn("[Onboarding] Company save failed:", err.message)
+        });
         nextStep(values);
     };
 

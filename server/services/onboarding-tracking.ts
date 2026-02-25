@@ -98,7 +98,7 @@ export async function finalizeOnboarding(tenantId: number) {
         await tx.update(onboardingProgress)
             .set({
                 completedAt: new Date(),
-                lastStep: "completed",
+                lastStep: "first-message", // Keep within valid enum; completedAt signals final completion
                 firstMessageCompleted: true
             })
             .where(eq(onboardingProgress.tenantId, tenantId));
