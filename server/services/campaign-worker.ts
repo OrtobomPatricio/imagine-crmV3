@@ -205,20 +205,17 @@ async function processWhatsAppCampaignBatch(campaign: typeof campaigns.$inferSel
     }
 
     // 2. Get connection credentials
-    // Logic: Campaigns might be linked to a specific whatsappNumberId in the future, 
-    // currently the schema links recipients to whatsappNumberId.
-    // We'll assume the system uses the FIRST active connection if not specified, 
-    // or we need to find the connection for the recipient's assigned number.
-
-    // For simplicity: Try to find a valid connection for the sending number.
-    // In `leads`, we have `whatsappNumberId`? No, that's assignation.
-    // In `campaignRecipients`, `whatsappNumberId` IS NULLABLE.
-
-    // We need a valid accessToken.
-    const connections = await db.select().from(whatsappConnections).where(eq(whatsappConnections.isConnected, true));
+    // CRITICAL SECURITY (Anti-Ban): Campaigns are strictly restricted to Meta Cloud API.
+    // We explicitly filter for connectionType === "api" and reject Baileys (qr).
+    const connections = await db.select()
+        .from(whatsappConnections)
+        .where(and(
+            eq(whatsappConnections.isConnected, true),
+            eq(whatsappConnections.connectionType, "api")
+        ));
 
     if (connections.length === 0) {
-        console.warn(`[CampaignWorker] No active WhatsApp connections found. Pausing campaign ${campaign.id}.`);
+        console.warn(`[CampaignWorker] No active Meta Cloud API connections found (Baileys/QR blocked for mass messaging). Pausing campaign ${campaign.id}.`);
         await db.update(campaigns).set({ status: "paused" }).where(eq(campaigns.id, campaign.id));
         return;
     }

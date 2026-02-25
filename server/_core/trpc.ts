@@ -15,7 +15,7 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 const requireUser = t.middleware(async opts => {
-  const { ctx, next } = opts;
+  const { ctx, next, path } = opts;
 
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
@@ -24,6 +24,24 @@ const requireUser = t.middleware(async opts => {
   // If user is disabled, treat as logged out
   if ((ctx.user as any).isActive === false) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  }
+
+  // BILLING LOCK: Query tenant status to enforce suspension
+  const db = await getDb();
+  if (db && ctx.user.tenantId !== 1) { // Skip default local tenant usually used for admin
+    const { tenants } = await import("../../drizzle/schema");
+    const tenantRows = await db.select({ status: tenants.status }).from(tenants).where(eq(tenants.id, ctx.user.tenantId)).limit(1);
+
+    if (tenantRows[0]?.status === "suspended") {
+      // Allow exceptions for billing/session management
+      const isAllowed = path.startsWith("auth.") || path.startsWith("billing.") || path.startsWith("settings.getBilling");
+      if (!isAllowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "PAYMENT_REQUIRED: Su cuenta se encuentra suspendida. Por favor, actualice su método de pago."
+        });
+      }
+    }
   }
 
   return next({

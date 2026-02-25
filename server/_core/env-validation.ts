@@ -36,7 +36,7 @@ export function validateEnvironment(): void {
     // Validate critical secrets
     for (const secret of CRITICAL_SECRETS) {
         const value = process.env[secret.name];
-        
+
         if (!value) {
             errors.push(`${secret.name} is not set`);
             continue;
@@ -49,6 +49,10 @@ export function validateEnvironment(): void {
         // Check for weak patterns
         for (const pattern of WEAK_PATTERNS) {
             if (pattern.test(value)) {
+                if (process.env.NODE_ENV === "production") {
+                    console.error(`[CRITICAL SECURITY] ${secret.name} is using a weak/default value in production. Aborting to protect system.`);
+                    process.exit(1);
+                }
                 errors.push(`${secret.name} appears to be using a weak/default value`);
                 break;
             }
@@ -88,7 +92,7 @@ export function validateEnvironment(): void {
         }
         logger.error("\n[EnvValidation] Application startup aborted due to insecure configuration.");
         logger.error("[EnvValidation] Please fix the above issues in your .env file.\n");
-        
+
         throw new Error(`Environment validation failed: ${errors.join(", ")}`);
     }
 

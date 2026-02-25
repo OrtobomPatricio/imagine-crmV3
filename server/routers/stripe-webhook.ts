@@ -89,10 +89,32 @@ export function registerStripeWebhookRoutes(app: Express): void {
 
                 case "invoice.payment_failed": {
                     const invoice = event.data.object as any;
+                    const customerId = invoice.customer as string;
+
+                    // Hard block for unpaid subscriptions
+                    await db.update(tenants).set({
+                        status: "suspended",
+                    } as any).where(eq((tenants as any).stripeCustomerId, customerId));
+
                     logger.error({
-                        customerId: invoice.customer,
+                        customerId,
                         amount: invoice.amount_due,
-                    }, "[StripeWebhook] Payment failed");
+                    }, "[StripeWebhook] Payment failed, tenant suspended");
+                    break;
+                }
+
+                case "invoice.paid":
+                case "invoice.payment_succeeded": {
+                    const invoice = event.data.object as any;
+                    const customerId = invoice.customer as string;
+
+                    await db.update(tenants).set({
+                        status: "active",
+                    } as any).where(eq((tenants as any).stripeCustomerId, customerId));
+
+                    logger.info({
+                        customerId,
+                    }, "[StripeWebhook] Payment succeeded, tenant restored");
                     break;
                 }
 

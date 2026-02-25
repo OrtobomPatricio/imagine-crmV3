@@ -53,9 +53,12 @@ export const rateLimitMiddleware = async (req: Request, res: Response, next: Nex
         "/api/meta/connect": { max: 5, windowMs: 300000 },
     };
 
-    const endpointConfig = SENSITIVE_ENDPOINTS[req.path];
+    // Use includes to support tRPC batching like /api/trpc/auth.login,auth.me
+    const matchedKey = Object.keys(SENSITIVE_ENDPOINTS).find(key => req.path.includes(key.replace("/api/trpc/", "")));
+    const endpointConfig = matchedKey ? SENSITIVE_ENDPOINTS[matchedKey] : null;
+
     if (endpointConfig) {
-        const epKey = `ratelimit:endpoint:${req.path}:${ip}`;
+        const epKey = `ratelimit:endpoint:${matchedKey}:${ip}`;
         const now = Date.now();
         const epBucket = buckets.get(epKey);
 

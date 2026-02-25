@@ -150,21 +150,32 @@ export const leadsRouter = router({
                     ? COMMISSION_RATES.PANAMA
                     : COMMISSION_RATES.DEFAULT;
 
-                const result = await tx.insert(leads).values({
-                    tenantId: ctx.tenantId,
-                    ...input,
-                    email: input.email || null, // handle empty string vs null
-                    value: input.value ? input.value.toString() : "0.00",
-                    commission,
-                    assignedToId: ctx.user?.id,
-                    whatsappNumberId: defaultWhatsappNumberId as any,
-                    pipelineStageId: stageId as any,
-                    kanbanOrder: nextOrder as any,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                });
-
-                const newLeadId = result[0].insertId;
+                let newLeadId: number;
+                try {
+                    const result = await tx.insert(leads).values({
+                        tenantId: ctx.tenantId,
+                        ...input,
+                        email: input.email || null, // handle empty string vs null
+                        value: input.value ? input.value.toString() : "0.00",
+                        commission,
+                        assignedToId: ctx.user?.id,
+                        whatsappNumberId: defaultWhatsappNumberId as any,
+                        pipelineStageId: stageId as any,
+                        kanbanOrder: nextOrder as any,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    });
+                    newLeadId = result[0].insertId;
+                } catch (error: any) {
+                    // Safe catch race condition duplicates using DB unique constraint
+                    if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
+                        const existingLead = await tx.select().from(leads).where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.phone, input.phone))).limit(1);
+                        if (existingLead[0]) {
+                            return { id: existingLead[0].id, success: true, existed: true };
+                        }
+                    }
+                    throw error;
+                }
 
                 if (defaultWhatsappNumberId) {
                     // We run side-effects OUTSIDE transaction usually, or fire-and-forget inside.
@@ -320,6 +331,12 @@ export const leadsRouter = router({
             if (ids.length === 0) return { success: true, updated: 0 } as const;
 
             return await db.transaction(async (tx) => {
+                // CRITICAL MULTI-TENANT VERIFICATION: Ensure all IDs actually belong to the tenant before doing bulk updates.
+                const validRows = await tx.select({ id: leads.id }).from(leads).where(and(eq(leads.tenantId, ctx.tenantId), inArray(leads.id, ids)));
+                if (validRows.length !== ids.length) {
+                    throw new Error("HTTP 403: Intent to update leads from another tenant detected. Action blocked.");
+                }
+
                 const caseExpr = sql`CASE ${leads.id} ${sql.join(ids.map((id, idx) => sql`WHEN ${id} THEN ${idx + 1}`), sql` `)} END`;
 
                 await tx.update(leads)
