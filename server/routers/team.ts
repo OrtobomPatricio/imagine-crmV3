@@ -12,7 +12,7 @@ export const teamRouter = router({
         const db = await getDb();
         if (!db) return [];
 
-        return db.select({
+        const result = await db.select({
             id: users.id,
             openId: users.openId,
             name: users.name,
@@ -23,6 +23,7 @@ export const teamRouter = router({
             createdAt: users.createdAt,
             lastSignedIn: users.lastSignedIn,
         }).from(users).where(eq(users.tenantId, ctx.tenantId)).orderBy(desc(users.createdAt));
+        return Array.isArray(result) ? result : [];
     }),
 
     updateRole: permissionProcedure("users.manage")
