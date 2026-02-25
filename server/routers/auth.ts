@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { users } from "../../drizzle/schema";
+import { users, termsAcceptance } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { sdk } from "../_core/sdk";
@@ -59,7 +59,7 @@ export const authRouter = router({
             // Rate limiting por email e IP
             const ip = getClientIp(ctx.req);
             const rateLimitKey = `${input.email}:${ip}`;
-            
+
             try {
                 await authRateLimit(rateLimitKey);
             } catch (e: any) {
@@ -95,7 +95,11 @@ export const authRouter = router({
         }),
 
     acceptInvitation: publicProcedure
-        .input(z.object({ token: z.string(), password: z.string().min(6) }))
+        .input(z.object({
+            token: z.string(),
+            password: z.string().min(6),
+            termsVersion: z.string().optional(), // Match request for termsVersion
+        }))
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
             if (!db) throw new Error("Database not available");
@@ -109,15 +113,28 @@ export const authRouter = router({
 
             const hashedPassword = await bcrypt.hash(input.password, 10);
 
-            await db.update(users)
-                .set({
-                    password: hashedPassword,
-                    invitationToken: null,
-                    invitationExpires: null,
-                    isActive: true,
-                    loginMethod: 'credentials'
-                })
-                .where(eq(users.id, user[0].id));
+            // Transaction to ensure both user update and terms acceptance are recorded
+            await db.transaction(async (tx) => {
+                await tx.update(users)
+                    .set({
+                        password: hashedPassword,
+                        invitationToken: null,
+                        invitationExpires: null,
+                        isActive: true,
+                        loginMethod: 'credentials'
+                    })
+                    .where(eq(users.id, user[0].id));
+
+                if (input.termsVersion) {
+                    await tx.insert(termsAcceptance).values({
+                        tenantId: user[0].tenantId,
+                        userId: user[0].id,
+                        termsVersion: input.termsVersion,
+                        ipAddress: getClientIp(ctx.req),
+                        userAgent: (ctx.req.headers["user-agent"] as string),
+                    });
+                }
+            });
 
             return { success: true };
         }),

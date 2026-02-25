@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import * as mockDb from './db-mock';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -13,14 +14,16 @@ let _pool: mysql.Pool | null = null;
 export async function getDb() {
   if (_db) return _db;
 
-  if (!process.env.DATABASE_URL) {
-    console.error("[Database] FATAL: DATABASE_URL not set.");
-    return null;
+  // Check if we should use mock database
+  if (process.env.USE_MOCK_DB === "true" || !process.env.DATABASE_URL) {
+    console.log("[Database] Using MOCK database (USE_MOCK_DB=true or no DATABASE_URL)");
+    _db = await mockDb.getDb();
+    return _db;
   }
 
   try {
     if (!_pool) {
-      console.log("[Database] Initializing connection pool...");
+      console.log("[Database] Initializing MySQL connection pool...");
       _pool = mysql.createPool({
         uri: process.env.DATABASE_URL,
         multipleStatements: false,
@@ -40,11 +43,11 @@ export async function getDb() {
     connection.release();
 
     _db = drizzle(_pool as any);
-    console.log("[Database] Connection initialized successfully.");
+    console.log("[Database] MySQL connection initialized successfully.");
   } catch (error) {
-    console.error("[Database] Connection FAILURE:", error);
-    _db = null;
-    _pool = null; // Reset pool on failure to allow retry
+    console.error("[Database] MySQL Connection FAILURE:", error);
+    console.log("[Database] Falling back to MOCK database...");
+    _db = await mockDb.getDb();
   }
   return _db;
 }

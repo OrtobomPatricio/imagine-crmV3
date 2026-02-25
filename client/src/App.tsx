@@ -23,8 +23,13 @@ import Login from "./pages/Login";
 import SetupAccount from "./pages/SetupAccount";
 import { useAuth } from "./_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import TermsPage from "@/pages/TermsPage";
+import PrivacyPage from "@/pages/PrivacyPage";
+import OnboardingPage from "./pages/OnboardingPage";
 import { useEffect } from "react";
-
+import { Loader2 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { OnboardingChecklist } from "./components/onboarding/OnboardingChecklist";
 // Redirect component for consolidated routes
 function Redirect({ to }: { to: string }) {
   const [, setLocation] = useLocation();
@@ -33,6 +38,37 @@ function Redirect({ to }: { to: string }) {
   }, [setLocation, to]);
   return null;
 }
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const [location] = useLocation(); // Use array destructuring for wouter's useLocation
+  const { data: user, isLoading } = trpc.auth.me.useQuery();
+  const { data: onboarding, isLoading: isLoadingOnboarding } = trpc.onboarding.getProgress.useQuery();
+
+  if (isLoading || isLoadingOnboarding) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  // Forced Onboarding Redirect
+  const isOnboardingDone = onboarding?.completedAt;
+  if (!isOnboardingDone && location !== '/onboarding') {
+    return <Redirect to="/onboarding" />;
+  }
+
+  // Prevent accessing onboarding if already done
+  if (isOnboardingDone && location === '/onboarding') {
+    return <Redirect to="/" />;
+  }
+
+  return <>{children}</>;
+};
 
 function Router() {
   const { isAuthenticated, loading } = useAuth();
@@ -49,45 +85,51 @@ function Router() {
     return (
       <Switch>
         <Route path="/setup-account" component={SetupAccount} />
+        <Route path="/terms">{() => <TermsPage />}</Route>
+        <Route path="/privacy">{() => <PrivacyPage />}</Route>
         <Route component={Login} />
       </Switch>
     );
   }
 
   return (
-    <DashboardLayout>
+    <ProtectedRoute>
       <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/leads" component={LeadsModule} />
-        <Route path="/analytics" component={Analytics} />
-        <Route path="/monitoring" component={Monitoring} />
-        {/* Marketing Module - consolidated with tabs */}
-        <Route path="/campaigns" component={MarketingModule} />
-        <Route path="/campaigns/new" component={CampaignBuilder} />
-        <Route path="/templates" component={MarketingModule} />
-        <Route path="/automations" component={MarketingModule} />
-        <Route path="/automations/new" component={AutomationBuilder} />
-        <Route path="/automations/:id" component={AutomationBuilder} />
-        {/* Legacy redirects */}
-        <Route path="/reports">{() => <Redirect to="/analytics" />}</Route>
-        <Route path="/kanban">{() => <Redirect to="/leads" />}</Route>
-        <Route path="/warmup">{() => <Redirect to="/monitoring" />}</Route>
-
-        <Route path="/integrations" component={Integrations} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/settings/pipelines" component={PipelineSettings} />
-        <Route path="/scheduling" component={Scheduling} />
-        <Route path="/chat" component={Chat} />
-        {/* Helpdesk Module - consolidated with tabs */}
-        <Route path="/helpdesk" component={Helpdesk} />
-        <Route path="/helpdesk/queues">{() => <Redirect to="/helpdesk" />}</Route>
-        <Route path="/helpdesk/quick-answers">{() => <Redirect to="/helpdesk" />}</Route>
-
-        <Route path="/backup" component={Backup} />
-        <Route path="/404" component={NotFound} />
-        <Route component={NotFound} />
+        <Route path="/onboarding" component={OnboardingPage} />
+        <Route>
+          <DashboardLayout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/leads" component={LeadsModule} />
+              <Route path="/analytics" component={Analytics} />
+              <Route path="/monitoring" component={Monitoring} />
+              <Route path="/campaigns" component={MarketingModule} />
+              <Route path="/campaigns/new" component={CampaignBuilder} />
+              <Route path="/templates" component={MarketingModule} />
+              <Route path="/automations" component={MarketingModule} />
+              <Route path="/automations/new" component={AutomationBuilder} />
+              <Route path="/automations/:id" component={AutomationBuilder} />
+              <Route path="/reports">{() => <Redirect to="/analytics" />}</Route>
+              <Route path="/kanban">{() => <Redirect to="/leads" />}</Route>
+              <Route path="/warmup">{() => <Redirect to="/monitoring" />}</Route>
+              <Route path="/integrations" component={Integrations} />
+              <Route path="/settings" component={Settings} />
+              <Route path="/settings/pipelines" component={PipelineSettings} />
+              <Route path="/scheduling" component={Scheduling} />
+              <Route path="/chat" component={Chat} />
+              <Route path="/helpdesk" component={Helpdesk} />
+              <Route path="/helpdesk/queues">{() => <Redirect to="/helpdesk" />}</Route>
+              <Route path="/helpdesk/quick-answers">{() => <Redirect to="/helpdesk" />}</Route>
+              <Route path="/terms">{() => <TermsPage />}</Route>
+              <Route path="/privacy">{() => <PrivacyPage />}</Route>
+              <Route path="/backup" component={Backup} />
+              <Route path="/404" component={NotFound} />
+              <Route component={NotFound} />
+            </Switch>
+          </DashboardLayout>
+        </Route>
       </Switch>
-    </DashboardLayout>
+    </ProtectedRoute>
   );
 }
 

@@ -24,29 +24,22 @@ function isSecureRequest(req: Request) {
 export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
-
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
-
-  const secure = isSecureRequest(req);
+  const hostname = req.hostname;
+  const isDev = process.env.NODE_ENV !== 'production';
+  
+  // En desarrollo, usar opciones más permisivas
+  if (isDev) {
+    return {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+      secure: false, // No requerir HTTPS en desarrollo
+    };
+  }
 
   return {
     httpOnly: true,
     path: "/",
-    // IMPORTANT:
-    // - For debugging, we force Lax and non-secure to rule out Proxy/SSL mismatches.
-    // - This works on both HTTP and HTTPS (top-level navigation).
     sameSite: "lax",
     secure: isSecureRequest(req),
   };

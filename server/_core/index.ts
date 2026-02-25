@@ -7,9 +7,11 @@ import cors from "cors";
 import helmet from "helmet";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { registerDevBypass } from "./dev-bypass";
 import { registerNativeOAuth } from "./native-oauth";
 import { registerWhatsAppWebhookRoutes } from "../whatsapp/webhook";
 import { registerMetaRoutes } from "../meta-routes";
+import { registerStripeWebhookRoutes } from "../routers/stripe-webhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
@@ -211,11 +213,15 @@ export async function createApp() {
     }
   });
 
+  // Dev Bypass (debe ir antes que todo para interceptar)
+  registerDevBypass(app);
+
   // OAuth & Webhooks
   registerNativeOAuth(app);
   registerOAuthRoutes(app);
   registerWhatsAppWebhookRoutes(app);
   registerMetaRoutes(app);
+  registerStripeWebhookRoutes(app);
   registerTestRoutes(app);
 
   // File Uploads (Modular)

@@ -30,6 +30,12 @@ import { tagsRouter } from "./tags";
 import { notesTasksRouter } from "./notes-tasks";
 import { webhooksRouter } from "./webhooks";
 import { leadRemindersRouter } from "./lead-reminders";
+import { onboardingRouter } from "./onboarding";
+import { billingRouter } from "./billing";
+import { superadminRouter } from "./superadmin";
+import { trialRouter } from "./trial";
+import { termsRouter } from "./terms";
+import { gdprRouter } from "./gdpr";
 
 export const appRouter = router({
     system: systemRouter,
@@ -65,6 +71,12 @@ export const appRouter = router({
     notesTasks: notesTasksRouter,
     webhooks: webhooksRouter,
     leadReminders: leadRemindersRouter,
+    onboarding: onboardingRouter,
+    billing: billingRouter,
+    superadmin: superadminRouter,
+    trial: trialRouter,
+    terms: termsRouter,
+    gdpr: gdprRouter,
 });
 
 export type AppRouter = typeof appRouter;

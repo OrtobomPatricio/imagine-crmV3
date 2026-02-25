@@ -6,10 +6,15 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, decimal,
 export const tenants = mysqlTable("tenants", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  plan: mysqlEnum("plan", ["free", "starter", "pro", "enterprise"]).default("free").notNull(),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
   status: mysqlEnum("status", ["active", "suspended", "canceled"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  slugIdx: uniqueIndex("idx_tenant_slug").on(t.slug),
+}));
 
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
@@ -36,6 +41,13 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+
+  // GDPR compliance fields
+  gdprConsentAt: timestamp("gdprConsentAt"),
+  gdprConsentVersion: varchar("gdprConsentVersion", { length: 20 }),
+  marketingConsent: boolean("marketingConsent").default(false).notNull(),
+  marketingConsentAt: timestamp("marketingConsentAt"),
+  dataRetentionUntil: timestamp("dataRetentionUntil"), // Scheduled deletion date
 });
 
 export type User = typeof users.$inferSelect;
@@ -1091,3 +1103,29 @@ export type InsertWebhookDelivery = typeof webhookDeliveries.$inferInsert;
 
 export type UsageTracking = typeof usageTracking.$inferSelect;
 export type InsertUsageTracking = typeof usageTracking.$inferInsert;
+
+export const onboardingProgress = mysqlTable("onboarding_progress", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().unique().references(() => tenants.id, { onDelete: "cascade" }),
+
+  // Progress flags
+  companyCompleted: boolean("companyCompleted").default(false).notNull(),
+  teamCompleted: boolean("teamCompleted").default(false).notNull(),
+  whatsappCompleted: boolean("whatsappCompleted").default(false).notNull(),
+  importCompleted: boolean("importCompleted").default(false).notNull(),
+  firstMessageCompleted: boolean("firstMessageCompleted").default(false).notNull(),
+
+  // Metadata
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  lastStep: varchar("lastStep", { length: 50 }).default("company").notNull(),
+
+  // Temporal storage
+  companyData: json("companyData"),
+  teamInvites: json("teamInvites"),
+
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
+export type InsertOnboardingProgress = typeof onboardingProgress.$inferInsert;

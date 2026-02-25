@@ -7,6 +7,7 @@ import { format, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { decryptSecret } from "./_core/crypto";
 import { toWhatsAppCloudTo } from "./_core/phone";
+import { processScheduledDeletions } from "./services/gdpr-delete";
 
 interface ReminderJob {
     appointmentId: number;
@@ -213,6 +214,9 @@ async function runReminderJob(): Promise<void> {
         for (const daysBefore of daysBeforeList) {
             await processReminders(daysBefore);
         }
+
+        // GDPR: Process scheduled deletions
+        await processScheduledDeletions();
 
         console.log(`[Reminders] Reminder job completed`);
     } catch (error) {

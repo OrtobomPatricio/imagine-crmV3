@@ -65,6 +65,8 @@ import { TeamChatWidget } from "@/components/team-chat";
 import { CommandMenu } from "./CommandMenu";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { HelpCenter } from "@/components/help-center";
+import { OfflineBanner } from "./OfflineBanner";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 type MenuItem = {
   icon: any;
@@ -111,6 +113,7 @@ export default function DashboardLayout({
   const { loading, user } = useAuth();
   const [showTour, setShowTour] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  useOfflineQueue(); // Global sync handler
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -166,8 +169,8 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent 
-        sidebarWidth={sidebarWidth} 
+      <DashboardLayoutContent
+        sidebarWidth={sidebarWidth}
         setSidebarWidth={setSidebarWidth}
         commandOpen={commandOpen}
         setCommandOpen={setCommandOpen}
@@ -180,6 +183,7 @@ export default function DashboardLayout({
       <MobileBottomNav />
       <RealtimeNotifications />
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      <OfflineBanner />
     </SidebarProvider>
   );
 }

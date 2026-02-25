@@ -1,112 +1,92 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import {
+    getOrCreateOnboardingProgress,
+    updateOnboardingStep,
+    finalizeOnboarding
+} from "../services/onboarding-tracking";
+import { createDemoData } from "../services/onboarding-demo";
 import { getDb } from "../db";
-import { tenants, whatsappNumbers, users } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
-import { TRPCError } from "@trpc/server";
-import { logger } from "../_core/logger";
+import { tenants } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Onboarding Router
- *
- * 5-step wizard for new tenant setup:
- * 1. Company Info (name, industry, timezone)
- * 2. First WhatsApp Number
- * 3. Invite Team Members
- * 4. Configure Pipeline
- * 5. Complete setup
+ * Handles state persistence for the multi-step setup wizard.
  */
 
 export const onboardingRouter = router({
-    /** Get current onboarding progress */
+    // 1. Get current progress
     getProgress: protectedProcedure
         .query(async ({ ctx }) => {
-            const db = await getDb();
-            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-            const [tenant] = await db.select()
-                .from(tenants)
-                .where(eq(tenants.id, ctx.tenantId))
-                .limit(1);
-
-            const hasWANumber = await db.select({ id: whatsappNumbers.id })
-                .from(whatsappNumbers)
-                .where(eq(whatsappNumbers.tenantId, ctx.tenantId))
-                .limit(1);
-
-            const teamMembers = await db.select({ id: users.id })
-                .from(users)
-                .where(eq(users.tenantId, ctx.tenantId));
-
-            const steps = [
-                {
-                    id: 1,
-                    title: "Información de la empresa",
-                    description: "Configura el nombre y zona horaria",
-                    completed: !!(tenant as any)?.name,
-                },
-                {
-                    id: 2,
-                    title: "Conectar WhatsApp",
-                    description: "Agrega tu primer número de WhatsApp",
-                    completed: hasWANumber.length > 0,
-                },
-                {
-                    id: 3,
-                    title: "Invitar equipo",
-                    description: "Agrega miembros a tu equipo",
-                    completed: teamMembers.length > 1,
-                },
-                {
-                    id: 4,
-                    title: "Configurar Pipeline",
-                    description: "Personaliza tu embudo de ventas",
-                    completed: true, // Default pipeline is auto-created
-                },
-                {
-                    id: 5,
-                    title: "¡Listo!",
-                    description: "Tu CRM está configurado",
-                    completed: false,
-                },
-            ];
-
-            const completedCount = steps.filter((s) => s.completed).length;
-            const progress = Math.round((completedCount / steps.length) * 100);
-
-            return {
-                steps,
-                progress,
-                currentStep: steps.find((s) => !s.completed)?.id ?? 5,
-                isComplete: completedCount === steps.length,
-            };
+            return await getOrCreateOnboardingProgress(ctx.tenantId);
         }),
 
-    /** Update company info (Step 1) */
-    updateCompanyInfo: protectedProcedure
+    // 2. Save progress for a specific step
+    saveStep: protectedProcedure
         .input(z.object({
-            companyName: z.string().min(2).max(100),
-            industry: z.string().optional(),
-            timezone: z.string().optional(),
+            step: z.enum(['company', 'team', 'whatsapp', 'import', 'first-message']),
+            data: z.any().optional(),
+            completed: z.boolean()
+        }))
+        .mutation(async ({ input, ctx }) => {
+            return await updateOnboardingStep(
+                ctx.tenantId,
+                input.step,
+                input.data,
+                input.completed
+            );
+        }),
+
+    // 3. Skip an optional step
+    skipStep: protectedProcedure
+        .input(z.object({
+            step: z.enum(['team', 'import', 'first-message'])
+        }))
+        .mutation(async ({ input, ctx }) => {
+            return await updateOnboardingStep(
+                ctx.tenantId,
+                input.step,
+                null,
+                true // Mark as completed even if skipped
+            );
+        }),
+
+    // 4. Update Company Info (Step 1)
+    updateCompany: protectedProcedure
+        .input(z.object({
+            name: z.string().min(2),
+            timezone: z.string(),
+            language: z.string(),
+            currency: z.string(),
         }))
         .mutation(async ({ input, ctx }) => {
             const db = await getDb();
-            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+            if (!db) throw new Error("Database not available");
 
-            await db.update(tenants).set({
-                name: input.companyName,
-            } as any).where(eq(tenants.id, ctx.tenantId));
+            // Update tenant directly as well
+            await db.update(tenants)
+                .set({
+                    name: input.name,
+                    // Note: If tenants table had timezone/lang/etc, update them here
+                } as any)
+                .where(eq(tenants.id, ctx.tenantId));
 
-            return { success: true };
+            return await updateOnboardingStep(
+                ctx.tenantId,
+                "company",
+                input,
+                true
+            );
         }),
 
-    /** Mark onboarding as complete (Step 5) */
-    completeOnboarding: protectedProcedure
+    // 5. Finalize Onboarding
+    complete: protectedProcedure
         .mutation(async ({ ctx }) => {
-            const db = await getDb();
-            if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+            // Seed demo data first
+            await createDemoData(ctx.tenantId, ctx.user!.id);
 
-            logger.info({ tenantId: ctx.tenantId }, "[Onboarding] Completed");
-            return { success: true, message: "¡Onboarding completado! Tu CRM está listo." };
+            // Mark as finished
+            return await finalizeOnboarding(ctx.tenantId);
         }),
 });

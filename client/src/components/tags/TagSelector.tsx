@@ -146,7 +146,7 @@ export function TagSelector({
                                     {availableTags.map((tag) => (
                                         <CommandItem
                                             key={tag.id}
-                                            onSelect={() => addTag(tag as Tag)}
+                                            onSelect={() => addTag(tag as unknown as Tag)}
                                             className="flex items-center gap-2"
                                         >
                                             <span

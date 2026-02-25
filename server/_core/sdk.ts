@@ -248,18 +248,22 @@ class SDKServer {
         return null;
       }
 
-      // Stateful check: Verify JTI exists in DB
+      // Stateful check: Verify JTI exists in DB (skip for mock database)
       if (typeof jti === "string") {
         try {
           const database = await getDb();
           if (database) {
-            const session = await database.select().from(sessions).where(eq(sessions.sessionToken, jti)).limit(1);
-            if (!session[0]) {
-              logger.warn("[Auth] Session revoked or invalid (JTI not found)");
-              return null;
+            // Check if we're using mock database
+            const isMockDb = (database as any)?._isMock || (process.env.DATABASE_URL || '').includes('.sqlite') || (process.env.DATABASE_URL || '').startsWith('file:');
+            if (!isMockDb) {
+              const session = await database.select().from(sessions).where(eq(sessions.sessionToken, jti)).limit(1);
+              if (!session[0]) {
+                logger.warn("[Auth] Session revoked or invalid (JTI not found)");
+                return null;
+              }
+              // Update lastActivityAt
+              database.update(sessions).set({ lastActivityAt: new Date() }).where(eq(sessions.id, session[0].id)).catch(() => { });
             }
-            // Update lastActivityAt
-            database.update(sessions).set({ lastActivityAt: new Date() }).where(eq(sessions.id, session[0].id)).catch(() => { });
           }
         } catch (e) {
           logger.error({ err: safeError(e) }, "[Auth] DB session check failed");

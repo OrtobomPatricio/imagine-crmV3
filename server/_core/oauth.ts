@@ -31,7 +31,38 @@ export function registerOAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
         role: "owner"
       });
+      
+      // For mock database, create session directly
+      const database = await db.getDb();
+      const mockDb = database?._isMock || (database as any)?.constructor?.name === 'Object';
+      
       const sessionToken = await sdk.createSessionToken(openId, { name: "Dev User" });
+      
+      // Store session in mock database if needed
+      if (mockDb) {
+        const memoryDb = (db as any).getMemoryDb?.();
+        if (memoryDb) {
+          // Extract JTI from token
+          const parts = sessionToken.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+            if (payload.jti) {
+              memoryDb.sessions.set(payload.jti, {
+                id: Date.now(),
+                tenantId: 1,
+                userId: 1,
+                sessionToken: payload.jti,
+                ipAddress: req.ip || null,
+                userAgent: req.headers["user-agent"] as string || null,
+                expiresAt: new Date(Date.now() + ONE_YEAR_MS),
+                lastActivityAt: new Date(),
+                createdAt: new Date(),
+              });
+              console.log("[DevLogin] Session stored in mock DB:", payload.jti);
+            }
+          }
+        }
+      }
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });

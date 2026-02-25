@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { queueAction } from "@/lib/offline-queue";
 
 interface Props {
   conversationId: number;
@@ -478,6 +479,17 @@ export function ChatThread({ conversationId, showHelpdeskControls = false }: Pro
           },
         });
       });
+    }
+
+    if (!navigator.onLine) {
+      items.forEach(async (item) => {
+        await queueAction({
+          type: 'message',
+          payload: item.payload,
+          tenantId: (user as any)?.tenantId || 0
+        });
+      });
+      toast.info("Sin conexión. Mensaje guardado localmente.");
     }
 
     enqueueMessages(items);
